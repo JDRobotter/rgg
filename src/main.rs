@@ -27,15 +27,17 @@ fn main() {
 
     println!("[+] loaded ROM is {} bytes", rom.size());
 
-    rom.seek(0x25e);
+    let mut addr = 0x0;
+    let mut la = 0;
+    rom.seek(addr);
 
-    let mut addr = 0;
     loop {
         match rom.read_one() {
             Some(byte) => {
                 match decoder.push(byte) {
                     Some(ins) => {
-                        println!("{:04x}: {}", addr, ins.to_string());
+                        println!("{:04x}: {}", la, ins.to_string());
+                        la = addr + 1;
                     },
                     None => {},
                 }
