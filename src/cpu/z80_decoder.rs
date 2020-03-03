@@ -1,7 +1,4 @@
 
-use std::vec;
-use std::fmt;
-
 pub enum Z80InstructionLocation {
 
     RegisterA,
@@ -419,7 +416,7 @@ impl Z80InstructionDecoder {
                 //  SLA : 00 100 rrr
                 //  SRA : 00 101 rrr
                 //  SRL : 00 111 rrr
-                match(b) {
+                match b {
                    0b000 => Some(ZI::RotateLeftCarry(loc)),
                    0b010 => Some(ZI::RotateLeft(loc)),
                    0b001 => Some(ZI::RotateRightCarry(loc)),

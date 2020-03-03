@@ -1,5 +1,6 @@
 
 use crate::cpu::Z80InstructionDecoder;
+use crate::system::SystemBus;
 
 struct Z80Registers {
     // accumulator
@@ -49,5 +50,15 @@ impl Z80 {
             registers: Z80Registers::new(),
             decoder: Z80InstructionDecoder::new(),
         }
+    }
+
+    pub fn step(&mut self, bus:&mut SystemBus) {
+
+        // fetch one byte from stack pointer
+        let opb = bus.cpu_read(self.registers.sp);
+
+        // feed byte to instruction decoder
+        self.decoder.push(opb);
+
     }
 }
