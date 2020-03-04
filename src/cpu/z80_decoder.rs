@@ -6,7 +6,6 @@ pub enum Z80InstructionLocation {
     RegisterC,
     RegisterD,
     RegisterE,
-    RegisterF,
     RegisterH,
     RegisterL,
 
@@ -45,7 +44,6 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterC =>          format!("C"),
             Z80InstructionLocation::RegisterD =>          format!("D"),
             Z80InstructionLocation::RegisterE =>          format!("E"),
-            Z80InstructionLocation::RegisterF =>          format!("F"),
             Z80InstructionLocation::RegisterH =>          format!("H"),
             Z80InstructionLocation::RegisterL =>          format!("L"),
             Z80InstructionLocation::RegisterIndirectHL => format!("(HL)"),
@@ -109,8 +107,8 @@ pub enum Z80Instruction {
     // misc operations
     NOP,
     Halt,
-    DisableINT,
-    EnableINT,
+    DisableInt,
+    EnableInt,
     SetINTMode0,
     SetINTMode1,
     SetINTMode2,
@@ -185,11 +183,11 @@ impl Z80Instruction {
         match self {
             Z80Instruction::NOP =>          format!("nop"),
             Z80Instruction::Halt =>         format!("halt"),
-            Z80Instruction::DisableINT =>   format!("dint"),
-            Z80Instruction::EnableINT =>    format!("eint"),
-            Z80Instruction::SetINTMode0 =>  format!("sim0"),
-            Z80Instruction::SetINTMode1 =>  format!("sim1"),
-            Z80Instruction::SetINTMode2 =>  format!("sim2"),
+            Z80Instruction::DisableInt =>   format!("di"),
+            Z80Instruction::EnableInt =>    format!("ei"),
+            Z80Instruction::SetINTMode0 =>  format!("im0"),
+            Z80Instruction::SetINTMode1 =>  format!("im1"),
+            Z80Instruction::SetINTMode2 =>  format!("im2"),
 
             Z80Instruction::JumpImmediate(cond, addr) =>    format!("jp {} {}",cond.to_string(), addr.to_string()),
             Z80Instruction::JumpRelative(cond, v) =>        format!("jr {} PC+{}", cond.to_string(), v.to_string()),
@@ -460,8 +458,8 @@ impl Z80InstructionDecoder {
         // Z80 manual table 20 - misc operations
         if self.match_byte(0x00)                    { Some(ZI::NOP) }
         else if self.match_byte(0x76)               { Some(ZI::Halt) }
-        else if self.match_byte(0xF3)               { Some(ZI::DisableINT) }
-        else if self.match_byte(0xFB)               { Some(ZI::EnableINT) }
+        else if self.match_byte(0xF3)               { Some(ZI::DisableInt) }
+        else if self.match_byte(0xFB)               { Some(ZI::EnableInt) }
         else if self.match_bytes(&[0xED, 0x46])     { Some(ZI::SetINTMode0) }
         else if self.match_bytes(&[0xED, 0x56])     { Some(ZI::SetINTMode1) }
         else if self.match_bytes(&[0xED, 0x5E])     { Some(ZI::SetINTMode2) }
@@ -506,7 +504,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x79) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterC)) }
         else if self.match_byte(0x7A) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterD)) }
         else if self.match_byte(0x7B) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterE)) }
-        else if self.match_byte(0x7C) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterF)) }
+        else if self.match_byte(0x7C) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterH)) }
         else if self.match_byte(0x7D) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterL)) }
         else if self.match_byte(0x7E) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterIndirectHL)) }
         else if self.match_byte(0x0A) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterIndirectBC)) }
@@ -529,7 +527,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x41) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterC)) }
         else if self.match_byte(0x42) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterD)) }
         else if self.match_byte(0x43) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterE)) }
-        else if self.match_byte(0x44) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterF)) }
+        else if self.match_byte(0x44) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterH)) }
         else if self.match_byte(0x45) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterL)) }
         else if self.match_byte(0x46) { Some(ZI::Load(ZIL::RegisterB, ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x46), ZIB::Placeholder]) {
@@ -547,7 +545,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x49) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterC)) }
         else if self.match_byte(0x4A) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterD)) }
         else if self.match_byte(0x4B) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterE)) }
-        else if self.match_byte(0x4C) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterF)) }
+        else if self.match_byte(0x4C) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterH)) }
         else if self.match_byte(0x4D) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterL)) }
         else if self.match_byte(0x4E) { Some(ZI::Load(ZIL::RegisterC, ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x4E), ZIB::Placeholder]) {
@@ -565,7 +563,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x51) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterC)) }
         else if self.match_byte(0x52) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterD)) }
         else if self.match_byte(0x53) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterE)) }
-        else if self.match_byte(0x54) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterF)) }
+        else if self.match_byte(0x54) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterH)) }
         else if self.match_byte(0x55) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterL)) }
         else if self.match_byte(0x56) { Some(ZI::Load(ZIL::RegisterD, ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x56), ZIB::Placeholder]) {
@@ -583,7 +581,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x59) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterC)) }
         else if self.match_byte(0x5A) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterD)) }
         else if self.match_byte(0x5B) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterE)) }
-        else if self.match_byte(0x5C) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterF)) }
+        else if self.match_byte(0x5C) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterH)) }
         else if self.match_byte(0x5D) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterL)) }
         else if self.match_byte(0x5E) { Some(ZI::Load(ZIL::RegisterE, ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x5E), ZIB::Placeholder]) {
@@ -601,7 +599,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x61) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterC)) }
         else if self.match_byte(0x62) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterD)) }
         else if self.match_byte(0x63) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterE)) }
-        else if self.match_byte(0x64) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterF)) }
+        else if self.match_byte(0x64) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterH)) }
         else if self.match_byte(0x65) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterL)) }
         else if self.match_byte(0x66) { Some(ZI::Load(ZIL::RegisterH, ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x66), ZIB::Placeholder]) {
@@ -619,7 +617,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x69) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterC)) }
         else if self.match_byte(0x6A) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterD)) }
         else if self.match_byte(0x6B) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterE)) }
-        else if self.match_byte(0x6C) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterF)) }
+        else if self.match_byte(0x6C) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterH)) }
         else if self.match_byte(0x6D) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterL)) }
         else if self.match_byte(0x6E) { Some(ZI::Load(ZIL::RegisterL, ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x6E), ZIB::Placeholder]) {
@@ -643,7 +641,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x71) { Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::RegisterC)) }
         else if self.match_byte(0x72) { Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::RegisterD)) }
         else if self.match_byte(0x73) { Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::RegisterE)) }
-        else if self.match_byte(0x74) { Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::RegisterF)) }
+        else if self.match_byte(0x74) { Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::RegisterH)) }
         else if self.match_byte(0x75) { Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::RegisterL)) }
         else if self.match_special(&[ZIB::Byte(0x36), ZIB::Placeholder]) {
             Some(ZI::Load(ZIL::RegisterIndirectHL, ZIL::Immediate(self.matched_value(0))))
@@ -670,7 +668,7 @@ impl Z80InstructionDecoder {
             Some(ZI::Load(ZIL::IndexedIX(self.matched_value(0)), ZIL::RegisterE))
         }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x74), ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndexedIX(self.matched_value(0)), ZIL::RegisterF))
+            Some(ZI::Load(ZIL::IndexedIX(self.matched_value(0)), ZIL::RegisterH))
         }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x75), ZIB::Placeholder]) {
             Some(ZI::Load(ZIL::IndexedIX(self.matched_value(0)), ZIL::RegisterL))
@@ -695,7 +693,7 @@ impl Z80InstructionDecoder {
             Some(ZI::Load(ZIL::IndexedIY(self.matched_value(0)), ZIL::RegisterE))
         }
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x74), ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndexedIY(self.matched_value(0)), ZIL::RegisterF))
+            Some(ZI::Load(ZIL::IndexedIY(self.matched_value(0)), ZIL::RegisterH))
         }
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x75), ZIB::Placeholder]) {
             Some(ZI::Load(ZIL::IndexedIY(self.matched_value(0)), ZIL::RegisterL))
@@ -805,7 +803,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x81) { Some(ZI::Add(ZIL::RegisterC)) }
         else if self.match_byte(0x82) { Some(ZI::Add(ZIL::RegisterD)) }
         else if self.match_byte(0x83) { Some(ZI::Add(ZIL::RegisterE)) }
-        else if self.match_byte(0x84) { Some(ZI::Add(ZIL::RegisterF)) }
+        else if self.match_byte(0x84) { Some(ZI::Add(ZIL::RegisterH)) }
         else if self.match_byte(0x85) { Some(ZI::Add(ZIL::RegisterL)) }
         else if self.match_byte(0x88) { Some(ZI::Add(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x86), ZIB::Placeholder]) {
@@ -823,7 +821,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x89) { Some(ZI::AddCarry(ZIL::RegisterC)) }
         else if self.match_byte(0x8A) { Some(ZI::AddCarry(ZIL::RegisterD)) }
         else if self.match_byte(0x8B) { Some(ZI::AddCarry(ZIL::RegisterE)) }
-        else if self.match_byte(0x8C) { Some(ZI::AddCarry(ZIL::RegisterF)) }
+        else if self.match_byte(0x8C) { Some(ZI::AddCarry(ZIL::RegisterH)) }
         else if self.match_byte(0x8D) { Some(ZI::AddCarry(ZIL::RegisterL)) }
         else if self.match_byte(0x8E) { Some(ZI::AddCarry(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x8E), ZIB::Placeholder]) {
@@ -842,7 +840,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x91) { Some(ZI::Sub(ZIL::RegisterC)) }
         else if self.match_byte(0x92) { Some(ZI::Sub(ZIL::RegisterD)) }
         else if self.match_byte(0x93) { Some(ZI::Sub(ZIL::RegisterE)) }
-        else if self.match_byte(0x94) { Some(ZI::Sub(ZIL::RegisterF)) }
+        else if self.match_byte(0x94) { Some(ZI::Sub(ZIL::RegisterH)) }
         else if self.match_byte(0x95) { Some(ZI::Sub(ZIL::RegisterL)) }
         else if self.match_byte(0x96) { Some(ZI::Sub(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x96), ZIB::Placeholder]) {
@@ -860,7 +858,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x99) { Some(ZI::SubCarry(ZIL::RegisterC)) }
         else if self.match_byte(0x9A) { Some(ZI::SubCarry(ZIL::RegisterD)) }
         else if self.match_byte(0x9B) { Some(ZI::SubCarry(ZIL::RegisterE)) }
-        else if self.match_byte(0x9C) { Some(ZI::SubCarry(ZIL::RegisterF)) }
+        else if self.match_byte(0x9C) { Some(ZI::SubCarry(ZIL::RegisterH)) }
         else if self.match_byte(0x9D) { Some(ZI::SubCarry(ZIL::RegisterL)) }
         else if self.match_byte(0x9E) { Some(ZI::SubCarry(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x9E), ZIB::Placeholder]) {
@@ -878,7 +876,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xA1) { Some(ZI::And(ZIL::RegisterC)) }
         else if self.match_byte(0xA2) { Some(ZI::And(ZIL::RegisterD)) }
         else if self.match_byte(0xA3) { Some(ZI::And(ZIL::RegisterE)) }
-        else if self.match_byte(0xA4) { Some(ZI::And(ZIL::RegisterF)) }
+        else if self.match_byte(0xA4) { Some(ZI::And(ZIL::RegisterH)) }
         else if self.match_byte(0xA5) { Some(ZI::And(ZIL::RegisterL)) }
         else if self.match_byte(0xA6) { Some(ZI::And(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0xA6), ZIB::Placeholder]) {
@@ -896,7 +894,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xA9) { Some(ZI::Xor(ZIL::RegisterC)) }
         else if self.match_byte(0xAA) { Some(ZI::Xor(ZIL::RegisterD)) }
         else if self.match_byte(0xAB) { Some(ZI::Xor(ZIL::RegisterE)) }
-        else if self.match_byte(0xAC) { Some(ZI::Xor(ZIL::RegisterF)) }
+        else if self.match_byte(0xAC) { Some(ZI::Xor(ZIL::RegisterH)) }
         else if self.match_byte(0xAD) { Some(ZI::Xor(ZIL::RegisterL)) }
         else if self.match_byte(0xAE) { Some(ZI::Xor(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0xAE), ZIB::Placeholder]) {
@@ -914,7 +912,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xB1) { Some(ZI::Or(ZIL::RegisterC)) }
         else if self.match_byte(0xB2) { Some(ZI::Or(ZIL::RegisterD)) }
         else if self.match_byte(0xB3) { Some(ZI::Or(ZIL::RegisterE)) }
-        else if self.match_byte(0xB4) { Some(ZI::Or(ZIL::RegisterF)) }
+        else if self.match_byte(0xB4) { Some(ZI::Or(ZIL::RegisterH)) }
         else if self.match_byte(0xB5) { Some(ZI::Or(ZIL::RegisterL)) }
         else if self.match_byte(0xB6) { Some(ZI::Or(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0xB6), ZIB::Placeholder]) {
@@ -932,7 +930,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xB9) { Some(ZI::Compare(ZIL::RegisterC)) }
         else if self.match_byte(0xBA) { Some(ZI::Compare(ZIL::RegisterD)) }
         else if self.match_byte(0xBB) { Some(ZI::Compare(ZIL::RegisterE)) }
-        else if self.match_byte(0xBC) { Some(ZI::Compare(ZIL::RegisterF)) }
+        else if self.match_byte(0xBC) { Some(ZI::Compare(ZIL::RegisterH)) }
         else if self.match_byte(0xBD) { Some(ZI::Compare(ZIL::RegisterL)) }
         else if self.match_byte(0xBE) { Some(ZI::Compare(ZIL::RegisterHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0xBE), ZIB::Placeholder]) {
@@ -950,7 +948,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x0C) { Some(ZI::Increment(ZIL::RegisterC)) }
         else if self.match_byte(0x14) { Some(ZI::Increment(ZIL::RegisterD)) }
         else if self.match_byte(0x1C) { Some(ZI::Increment(ZIL::RegisterE)) }
-        else if self.match_byte(0x24) { Some(ZI::Increment(ZIL::RegisterF)) }
+        else if self.match_byte(0x24) { Some(ZI::Increment(ZIL::RegisterH)) }
         else if self.match_byte(0x2C) { Some(ZI::Increment(ZIL::RegisterL)) }
         else if self.match_byte(0x34) { Some(ZI::Increment(ZIL::RegisterHL)) }
 
@@ -959,7 +957,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x0D) { Some(ZI::Decrement(ZIL::RegisterC)) }
         else if self.match_byte(0x15) { Some(ZI::Decrement(ZIL::RegisterD)) }
         else if self.match_byte(0x1D) { Some(ZI::Decrement(ZIL::RegisterE)) }
-        else if self.match_byte(0x25) { Some(ZI::Decrement(ZIL::RegisterF)) }
+        else if self.match_byte(0x25) { Some(ZI::Decrement(ZIL::RegisterH)) }
         else if self.match_byte(0x2D) { Some(ZI::Decrement(ZIL::RegisterL)) }
         else if self.match_byte(0x35) { Some(ZI::Decrement(ZIL::RegisterHL)) }
 

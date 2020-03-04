@@ -24,4 +24,8 @@ fn main() {
     
     let mut gg = system::GameGear::new(rom);
 
+    loop {
+        gg.step();
+    }
+
 }
