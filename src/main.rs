@@ -2,6 +2,8 @@
 extern crate clap;
 use clap::{App};
 
+use std::io;
+
 mod cpu;
 mod system;
 mod memory;
@@ -26,6 +28,10 @@ fn main() {
 
     loop {
         gg.step();
+
+        // wait for a key press
+        //let mut s = String::new();
+        //io::stdin().read_line(&mut s);
     }
 
 }

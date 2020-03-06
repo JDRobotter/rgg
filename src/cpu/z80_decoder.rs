@@ -30,9 +30,7 @@ pub enum Z80InstructionLocation {
     Immediate16(u16),
 
     Indirect(u8),
-
-    ImmediateExtended(u16),
-    IndirectExtended(u16),
+    Indirect16(u16),
 }
 use Z80InstructionLocation as ZIL;
 
@@ -59,16 +57,14 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterIX =>          format!("IX"),
             Z80InstructionLocation::RegisterIY =>          format!("IY"),
 
-            Z80InstructionLocation::IndexedIX(v) =>         format!("(IX+0x{:02x})",v),
-            Z80InstructionLocation::IndexedIY(v) =>         format!("(IY+0x{:02x})",v),
+            Z80InstructionLocation::IndexedIX(v) =>         format!("(IX{:+})", *v as i8),
+            Z80InstructionLocation::IndexedIY(v) =>         format!("(IY{:+})", *v as i8),
 
             Z80InstructionLocation::Immediate(v) =>         format!("0x{:02x}",v),
             Z80InstructionLocation::Immediate16(v) =>       format!("0x{:04x}",v),
 
-            Z80InstructionLocation::Indirect(v) =>         format!("(0x{:02x})",v),
-
-            Z80InstructionLocation::ImmediateExtended(v) => format!("0x{:04x}", v),
-            Z80InstructionLocation::IndirectExtended(v) =>          format!("(0x{:04x})", v),
+            Z80InstructionLocation::Indirect(v) =>          format!("(0x{:02x})",v),
+            Z80InstructionLocation::Indirect16(v) =>        format!("(0x{:04x})", v),
         }
     }
 }
@@ -122,6 +118,7 @@ pub enum Z80Instruction {
 
     // load group
     Load(Z80InstructionLocation, Z80InstructionLocation),
+    Load16(Z80InstructionLocation, Z80InstructionLocation),
     Push(Z80InstructionLocation),
     Pop(Z80InstructionLocation),
 
@@ -190,12 +187,19 @@ impl Z80Instruction {
             Z80Instruction::SetINTMode2 =>  format!("im2"),
 
             Z80Instruction::JumpImmediate(cond, addr) =>    format!("jp {} {}",cond.to_string(), addr.to_string()),
-            Z80Instruction::JumpRelative(cond, v) =>        format!("jr {} PC+{}", cond.to_string(), v.to_string()),
+            Z80Instruction::JumpRelative(cond, v) =>        {
+                // special case to show immediate value as signed displacement
+                match(v) {
+                    ZIL::Immediate(e)   => format!("jr {} PC{:+}", cond.to_string(), *e as i8),
+                    _                   => format!("jr {} PC+{}", cond.to_string(), v.to_string()),
+                }
+            }
             Z80Instruction::Call(cond, addr) =>             format!("call {} {}", cond.to_string(), addr.to_string()),
             Z80Instruction::DecrementJumpNZ(addr) =>        format!("djnz {}", addr.to_string()),
             Z80Instruction::Return(cond) =>                 format!("ret {}", cond.to_string()),
 
             Z80Instruction::Load(dst, src) =>   format!("ld {} {}", dst.to_string(), src.to_string()),
+            Z80Instruction::Load16(dst, src) =>   format!("ld16 {} {}", dst.to_string(), src.to_string()),
             Z80Instruction::Push(src) =>        format!("push {}", src.to_string()),
             Z80Instruction::Pop(dst) =>         format!("pop {}", dst.to_string()),
 
@@ -288,6 +292,9 @@ impl Z80InstructionDecoder {
         match self.decode_instruction() {
 
             Some(instruction) => {
+
+                // debug
+                self.debug_show_in_buffer();
 
                 // instruction decoded, reset input buffer
                 self.in_buffer.clear();
@@ -516,7 +523,7 @@ impl Z80InstructionDecoder {
             Some(ZI::Load(ZIL::RegisterA, ZIL::IndexedIY(self.matched_value(0))))
         }
         else if self.match_special(&[ZIB::Byte(0x3A), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterA, ZIL::IndirectExtended(self.matched_value_u16(0))))
+            Some(ZI::Load(ZIL::RegisterA, ZIL::Indirect16(self.matched_value_u16(0))))
         }
         else if self.match_special(&[ZIB::Byte(0x3E), ZIB::Placeholder]) {
             Some(ZI::Load(ZIL::RegisterA, ZIL::Immediate(self.matched_value(0))))
@@ -632,7 +639,7 @@ impl Z80InstructionDecoder {
 
         // external address
         else if self.match_special(&[ZIB::Byte(0x32), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterA))
+            Some(ZI::Load(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterA))
         }
 
         // destination register indirect HL
@@ -720,67 +727,67 @@ impl Z80InstructionDecoder {
 
         // BC
         else if self.match_special(&[ZIB::Byte(0x01), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterBC, ZIL::ImmediateExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterBC, ZIL::Immediate16(self.matched_value_u16(0))))
         }
         else if self.match_special(&[ZIB::Byte(0xED), ZIB::Byte(0x4B), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterBC, ZIL::IndirectExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterBC, ZIL::Indirect16(self.matched_value_u16(0))))
         }
 
         // DE
         else if self.match_special(&[ZIB::Byte(0x11), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterDE, ZIL::ImmediateExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterDE, ZIL::Immediate16(self.matched_value_u16(0))))
         }
         else if self.match_special(&[ZIB::Byte(0xED), ZIB::Byte(0x5B), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterDE, ZIL::IndirectExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterDE, ZIL::Indirect16(self.matched_value_u16(0))))
         }
 
         // HL
         else if self.match_special(&[ZIB::Byte(0x21), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterHL, ZIL::ImmediateExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterHL, ZIL::Immediate16(self.matched_value_u16(0))))
         }
         else if self.match_special(&[ZIB::Byte(0x2A), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterHL, ZIL::IndirectExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterHL, ZIL::Indirect16(self.matched_value_u16(0))))
         }
 
         // SP
-        else if self.match_byte(0xF9) { Some(ZI::Load(ZIL::RegisterSP, ZIL::RegisterHL)) }
+        else if self.match_byte(0xF9) { Some(ZI::Load16(ZIL::RegisterSP, ZIL::RegisterHL)) }
         else if self.match_special(&[ZIB::Byte(0x31), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterSP, ZIL::ImmediateExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterSP, ZIL::Immediate16(self.matched_value_u16(0))))
         }
 
         // IX
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x21), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterIX, ZIL::ImmediateExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterIX, ZIL::Immediate16(self.matched_value_u16(0))))
         }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x2A), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterIX, ZIL::IndirectExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterIX, ZIL::Indirect16(self.matched_value_u16(0))))
         }
 
         // IY
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x21), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterIY, ZIL::ImmediateExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterIY, ZIL::Immediate16(self.matched_value_u16(0))))
         }
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x2A), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::RegisterIY, ZIL::IndirectExtended(self.matched_value_u16(0))))
+            Some(ZI::Load16(ZIL::RegisterIY, ZIL::Indirect16(self.matched_value_u16(0))))
         }
 
         else if self.match_special(&[ZIB::Byte(0xED), ZIB::Byte(0x43), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterBC))
+            Some(ZI::Load16(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterBC))
         }
         else if self.match_special(&[ZIB::Byte(0xED), ZIB::Byte(0x53), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterDE))
+            Some(ZI::Load16(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterDE))
         }
         else if self.match_special(&[ZIB::Byte(0x22), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterHL))
+            Some(ZI::Load16(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterHL))
         }
         else if self.match_special(&[ZIB::Byte(0xED), ZIB::Byte(0x73), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterSP))
+            Some(ZI::Load16(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterSP))
         }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x22), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterIX))
+            Some(ZI::Load16(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterIX))
         }
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x22), ZIB::Placeholder, ZIB::Placeholder]) {
-            Some(ZI::Load(ZIL::IndirectExtended(self.matched_value_u16(0)), ZIL::RegisterIY))
+            Some(ZI::Load16(ZIL::Indirect16(self.matched_value_u16(0)), ZIL::RegisterIY))
         }
 
         else if self.match_byte(0xF5) { Some(ZI::Push(ZIL::RegisterAF)) }
@@ -1020,9 +1027,9 @@ impl Z80InstructionDecoder {
             Some(ZI::JumpRelative(ZJC::NonZero, ZIL::Immediate(2 + self.matched_value(0))))
         }
         // jump indirect
-        else if self.match_byte(0xE9)           { Some(ZI::JumpImmediate(ZJC::Unconditionnal, ZIL::RegisterIndirectHL)) }
-        else if self.match_bytes(&[0xDD,0xE9])  { Some(ZI::JumpImmediate(ZJC::Unconditionnal, ZIL::RegisterIndirectIX)) }
-        else if self.match_bytes(&[0xFD,0xE9])  { Some(ZI::JumpImmediate(ZJC::Unconditionnal, ZIL::RegisterIndirectIY)) }
+        else if self.match_byte(0xE9)           { Some(ZI::JumpImmediate(ZJC::Unconditionnal, ZIL::RegisterHL)) }
+        else if self.match_bytes(&[0xDD,0xE9])  { Some(ZI::JumpImmediate(ZJC::Unconditionnal, ZIL::RegisterIX)) }
+        else if self.match_bytes(&[0xFD,0xE9])  { Some(ZI::JumpImmediate(ZJC::Unconditionnal, ZIL::RegisterIY)) }
         // call
         else if self.match_special(&[ZIB::Byte(0xCD), ZIB::Placeholder, ZIB::Placeholder]) {
             Some(ZI::Call(ZJC::Unconditionnal,

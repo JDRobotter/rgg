@@ -12,25 +12,28 @@ impl Ram {
         }
     }
 
+    fn check_address_validity(&self, addr:usize) -> bool {
+        let sz = self.data.len();
+        (0 <= addr) && (addr < sz)
+    }
+
     pub fn write(&mut self, addr:u16, byte:u8) {
         let addr = addr as usize;
-        let sz = self.data.len();
-        if 0 < addr && addr < sz {
+        if self.check_address_validity(addr) {
             self.data[addr] = byte;
         }
         else {
-            panic!("out of bounds access to RAM");
+            panic!("out of bounds access to RAM ({:04x})", addr);
         }
     }
 
     pub fn read(&self, addr:u16) -> u8 {
         let addr = addr as usize;
-        let sz = self.data.len();
-        if 0 < addr && addr < sz {
+        if self.check_address_validity(addr) {
             self.data[addr]
         }
         else {
-            panic!("out of bounds access to RAM");
+            panic!("out of bounds access to RAM ({:04x}", addr);
         }
     }
 
