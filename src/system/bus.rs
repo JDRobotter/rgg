@@ -19,11 +19,79 @@ impl SystemBus {
     }
 
     pub fn io_read(&self, addr:u8) -> u8 {
-        return 0xB0;
+        println!("IOR @{:02x}", addr);
+        // https://www.smspower.org/uploads/Development/smstech-20021112.txt
+        // Z80 I/O ports
+        match addr {
+            // memory control
+            0x3E => {
+                0
+            },
+            // IO port control
+            0x3F => {
+                0
+            },
+            // V counter / PSG
+            0x7E => {
+                // HACK
+                0
+            },
+            // H counter / PSG
+            0x7F => {
+                0
+            },
+            // VDP data
+            0xBE => {
+                0
+            },
+            // VDP control
+            0xBF | 0xBD => {
+                0
+            },
+            // IO port A/B
+            0xDC | 0xC0 => {
+                0
+            },
+            // IO port B/misc
+            0xDD | 0xC1 => {
+                0
+            },
+            _ => { panic!("IO read from unknown address: {:02x}", addr) }
+        }
     }
 
     pub fn io_write(&mut self, addr:u8, data:u8) {
+        println!("IOW @{:02x} {:02x}", addr, data);
 
+        // https://www.smspower.org/uploads/Development/smstech-20021112.txt
+        // Z80 I/O ports
+        match addr {
+            // memory control
+            0x3E => {
+            },
+            // IO port control
+            0x3F => {
+            },
+            // V counter / PSG
+            0x7E => {
+            },
+            // H counter / PSG
+            0x7F => {
+            },
+            // VDP data
+            0xBE => {
+            },
+            // VDP control
+            0xBF | 0xBD => {
+            },
+            // IO port A/B
+            0xDC | 0xC0 => {
+            },
+            // IO port B/misc
+            0xDD | 0xC1 => {
+            },
+            _ => { panic!("IO write to unknown address: {:02x}", addr) }
+        }
     }
 
     pub fn cpu_read(&self, addr:u16) -> u8 {
@@ -51,7 +119,7 @@ impl SystemBus {
         //  $0000-$BFFF : Slot area
         //  $C000-$FFFF : Work RAM (8K, mirrored at $E000-$FFFF)
         if addr <= 0xbfff {
-            panic!("no writing to ROM ! (@{:04x})", addr)
+            println!("no writing to ROM ! (@{:04x})", addr)
         }
         else if addr <= 0xdfff {
             // work RAM

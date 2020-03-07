@@ -36,7 +36,7 @@ impl Z80StatusFlags {
     }
 
     pub fn to_string(&self) -> String {
-        format!("{} |{} |{} |{} |{} |{}",
+        format!("{}|{}|{}|{}|{}|{}",
             if self.s {"S"} else {" "},
             if self.z {"Z"} else {" "},
             if self.h {"H"} else {" "},
@@ -160,8 +160,8 @@ impl Z80Registers {
 
     pub fn to_string(&self) -> String {
         format!("A {:02x} |B {:02x} |D {:02x} |H {:02x} \
-                          |C {:02x} |E {:02x} |L {:02x}\n\
-                PC {:04x} |SP {:04x} |IX {:04x} |IY {:04x}\n\
+                          |C {:02x} |E {:02x} |L {:02x} \
+                |PC {:04x} |SP {:04x} |IX {:04x} |IY {:04x} \
                 {}",
                 self.a, self.b , self.d , self.h,
                          self.c , self.e , self.l,
@@ -200,19 +200,17 @@ impl Z80 {
             match self.decoder.push(opb) {
                 Some(ins) => {
 
-                    // show decoded instruction
-                    println!("{:04x}: {}",
-                        self.registers.pc.value,
-                        ins.to_string());
-
                     // set auto increment flag (will be set by PC jumps)
                     self.registers.pc.auto_increment = true;
 
                     // execute decoded instruction
                     self.execute_instruction(bus, ins);
 
-                    // show CPU registers state
-                    self.debug_cpu_registers();
+                    // show decoded instruction and registers state
+                    println!("{:04x}: {:16} {}",
+                        self.registers.pc.value,
+                        ins.to_string(),
+                        self.registers.to_string());
 
                     // if PC auto-increment flag is set (no jump as occured)
                     // increment PC to next instruction
@@ -254,7 +252,29 @@ impl Z80 {
         za as u16
     }
 
-    fn unpack_AND_operand(&self,
+    /// Return true if bit parity is even, false if parity is odd
+    fn compute_u8_parity(byte:u8) -> bool {
+        // Parity/Overflow Flag     p.67
+        //
+        // The number of 1 bits in a byte are counted.
+        // If the total is Odd, ODD parity is flagged (i.e., P = 0).
+        // If the total is even, even parity is flagged (i.e., P = 1).
+        //
+
+        let mut parity = false;
+        let mut v:u8 = byte;
+        
+        // slow and naive method
+        // https://graphics.stanford.edu/~seander/bithacks.html
+        while v != 0 {
+            parity = !parity;
+            v = v & (v-1);
+        }
+        
+        parity
+    }
+
+    fn read_AND_operand(&self,
                                 bus:&SystemBus,
                                 op:Z80InstructionLocation) -> u8 {
         match op {
@@ -285,6 +305,7 @@ impl Z80 {
                                 op:Z80InstructionLocation) -> u8 {
         match op {
             ZIL::Immediate(b) => { b },
+            ZIL::Indirect16(addr) => { bus.cpu_read(addr) },
             ZIL::RegisterA => { self.registers.a },
             ZIL::RegisterB => { self.registers.b },
             ZIL::RegisterC => { self.registers.c },
@@ -402,6 +423,39 @@ impl Z80 {
                 let addr = Z80::add_signed_u8_to_u16(self.registers.ix, d);
                 let byte = bus.cpu_read(addr);
                 bus.cpu_write(addr, Z80::add_i8_to_u8(byte, e));
+            },
+            _ => { panic!("unhandled operand: {}", op.to_string()) }
+        }
+    }
+
+
+    fn write_AND_operand(&mut self,
+                            bus:&mut SystemBus,
+                            op:Z80InstructionLocation,
+                            byte: u8) {
+        match op {
+            ZIL::RegisterA => { self.registers.a = byte },
+            ZIL::RegisterB => { self.registers.b = byte },
+            ZIL::RegisterC => { self.registers.c = byte },
+            ZIL::RegisterD => { self.registers.d = byte },
+            ZIL::RegisterE => { self.registers.e = byte },
+            ZIL::RegisterH => { self.registers.h = byte },
+            ZIL::RegisterL => { self.registers.l = byte },
+            ZIL::RegisterIndirectHL => {
+                // fetch byte on bus at address pointed by register HL
+                bus.cpu_write(self.registers.HL(), byte)
+            },
+            ZIL::IndexedIX(d) => {
+                bus.cpu_write(
+                    Z80::add_signed_u8_to_u16(self.registers.ix, d),
+                    byte
+                )
+            },
+            ZIL::IndexedIY(d) => {
+                bus.cpu_write(
+                    Z80::add_signed_u8_to_u16(self.registers.iy, d),
+                    byte
+                )
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
@@ -560,8 +614,8 @@ impl Z80 {
                 
                 if self.test_jump_condition(condition) {
                     // copy from top of stack to PC
-                    let hi = bus.cpu_read(self.registers.sp) as u16;
-                    let lo = bus.cpu_read(self.registers.sp+1) as u16;
+                    let lo = bus.cpu_read(self.registers.sp) as u16;
+                    let hi = bus.cpu_read(self.registers.sp+1) as u16;
                     let addr:u16 = (hi << 8) | lo;
 
                     // increment stack pointer
@@ -576,7 +630,7 @@ impl Z80 {
                 // ADD A,r  p.145
 
                 // unpack value to compare from operand
-                let value = self.unpack_AND_operand(bus, opv);
+                let value = self.read_AND_operand(bus, opv);
                 
                 // use an i16 temporary accumulator
                 let mut temp :i16 = self.registers.a as i8 as i16;
@@ -601,11 +655,67 @@ impl Z80 {
 
             },
 
+            ZI::Add16(oplhs, oprhs) => {
+                // ADD HL, ss   p.188
+                // ADD IX, pp
+                // ADD IY, rr
+
+                // unpack rhs operand
+                let rhs = match oprhs {
+                    ZIL::RegisterBC => { self.registers.BC() }
+                    ZIL::RegisterDE => { self.registers.DE() }
+                    ZIL::RegisterHL => { self.registers.HL() }
+                    ZIL::RegisterSP => { self.registers.sp }
+                    ZIL::RegisterIX => { self.registers.ix }
+                    ZIL::RegisterIY => { self.registers.iy }
+                  _ => { panic!("unhandled operand: {}", oprhs.to_string()) }
+                };
+
+                // unpack lhs operand
+                let lhs = match oplhs {
+                    ZIL::RegisterHL => { self.registers.HL() }
+                    ZIL::RegisterIX => { self.registers.ix }
+                    ZIL::RegisterIY => { self.registers.iy }
+                  _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
+                };
+                
+                // use an i32 temporary accumulator
+                let mut temp :i32 = lhs as i16 as i32;
+                // perform addition
+                temp += rhs as i16 as i32;
+
+                // assign result as u16 
+                let utemp = temp as u16;
+                // assign value to lhs operand
+                let lhs = match oplhs {
+                    ZIL::RegisterHL => { self.registers.set_HL(utemp) }
+                    ZIL::RegisterIX => { self.registers.ix = utemp }
+                    ZIL::RegisterIY => { self.registers.iy = utemp }
+                  _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
+                };
+
+                // update status flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = temp < 0;
+                // zero
+                self.registers.flags.z = temp == 0;
+                // overflow
+                self.registers.flags.pv = (temp < -128) || (127 < temp);
+                // carry
+                self.registers.flags.c = temp > 127;
+                // half-carry
+                self.registers.flags.h = false;
+
+
+            },
+
             ZI::Sub(opv) => {
                 // SUB s    p.153
                 
                 // unpack value to compare from operand
-                let value = self.unpack_AND_operand(bus, opv);
+                let value = self.read_AND_operand(bus, opv);
                 
                 // use an i16 temporary accumulator
                 let mut temp :i16 = self.registers.a as i8 as i16;
@@ -650,7 +760,7 @@ impl Z80 {
                 // CP s     p.163
                 
                 // unpack value to compare from operand
-                let value = self.unpack_AND_operand(bus, opv);
+                let value = self.read_AND_operand(bus, opv);
 
                 // NDJD: CP seems to behave like SUB except it
                 // does not update accumulator with result
@@ -680,7 +790,7 @@ impl Z80 {
                 // OR s     p.159
                 
                 // unpack value to compare from operand
-                let value = self.unpack_AND_operand(bus, opv);
+                let value = self.read_AND_operand(bus, opv);
 
                 // NDJD: CP seems to behave like SUB except it
                 // does not update accumulator with result
@@ -704,7 +814,221 @@ impl Z80 {
                 self.registers.flags.h = false;
             },
 
+            ZI::ShiftLeftArithmetic(opv) => {
+                // SLA  p.230
+                //
 
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // store shifted bit in carry
+                self.registers.flags.c = (byte & 0x80) != 0;
+                // shift left
+                byte = byte << 1;
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            },
+
+            ZI::ShiftRightArithmetic(opv) => {
+                // SRA  p.233
+                //
+
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // bit 7 will be preserved by this shift
+                let bit7 = byte & 0x80;
+                // store shifted bit in carry
+                self.registers.flags.c = (byte & 0x01) != 0;
+                // shift right
+                byte = byte >> 1;
+                // restore bit 7
+                byte = byte & bit7;
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            },
+
+            ZI::ShiftRightLogic(opv) => {
+                // SRL  p.236
+                //
+
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // store shifted bit in carry
+                self.registers.flags.c = (byte & 0x01) != 0;
+                // shift right
+                byte = byte >> 1;
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            },
+
+            ZI::RotateLeftCarry(opv) => {
+                // RLC  p.213
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // bit 7 will be shoved back to bit 0 after shift
+                let bit7 = byte & 0x80;
+                // store rotated bit in carry
+                self.registers.flags.c = bit7 != 0;
+                // shift left
+                byte = byte << 1;
+                // shove rotated bit in position 0
+                byte = byte & if bit7 == 0 { 0x00 } else { 0x01 };
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            }
+
+            ZI::RotateLeft(opv) => {
+                // RL  p.221
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // carry will be pushed to bit 0
+                let carry = self.registers.flags.c;
+                // bit 7 will be pushed to carry after shift
+                self.registers.flags.c = (byte & 0x80) != 0;
+                // shift left
+                byte = byte << 1;
+                // shove rotated bit in position 0
+                byte = byte & if carry { 0x01 } else { 0x00 };
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            },
+
+            ZI::RotateRightCarry(opv) => {
+                // RRC  p.224
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // bit 0 will be shoved back to bit 7 after shift
+                let bit0 = byte & 0x01;
+                // store rotated bit in carry
+                self.registers.flags.c = bit0 != 0;
+                // shift right
+                byte = byte >> 1;
+                // shove rotated bit in position 7
+                byte = byte & if bit0 == 0 { 0x00 } else { 0x80 };
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            }
+
+            ZI::RotateRight(opv) => {
+                // RR  p.227
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.read_AND_operand(bus, opv);
+
+                // carry will be pushed to bit 7
+                let carry = self.registers.flags.c;
+                // bit 0 will be pushed to carry after shift
+                self.registers.flags.c = (byte & 0x01) != 0;
+                // shift right
+                byte = byte >> 1;
+                // shove rotated bit in position 7
+                byte = byte & if carry { 0x80 } else { 0x00 };
+
+                // write byte back
+                self.write_AND_operand(bus,opv,byte);
+
+                // update flags
+                // add/sub
+                self.registers.flags.n = false;
+                // sign
+                self.registers.flags.s = (byte as i8) < 0;
+                // zero
+                self.registers.flags.z = byte == 0;
+                // overflow
+                self.registers.flags.pv = Z80::compute_u8_parity(byte);
+                // half-carry
+                self.registers.flags.h = false;
+            },
 
             ZI::LoadIncrement => {
                 self.load_increment(bus, 1)

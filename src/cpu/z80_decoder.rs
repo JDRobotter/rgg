@@ -1,4 +1,5 @@
 
+#[derive(Copy, Clone)]
 pub enum Z80InstructionLocation {
 
     RegisterA,
@@ -69,6 +70,7 @@ impl Z80InstructionLocation {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum Z80JumpCondition {
     Unconditionnal,
     Carry,
@@ -98,6 +100,7 @@ impl Z80JumpCondition {
     }
 }
 
+#[derive(Copy, Clone)]
 pub enum Z80Instruction {
 
     // misc operations
@@ -292,9 +295,6 @@ impl Z80InstructionDecoder {
         match self.decode_instruction() {
 
             Some(instruction) => {
-
-                // debug
-                self.debug_show_in_buffer();
 
                 // instruction decoded, reset input buffer
                 self.in_buffer.clear();
