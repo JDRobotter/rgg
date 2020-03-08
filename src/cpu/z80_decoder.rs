@@ -1,5 +1,5 @@
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Z80InstructionLocation {
 
     RegisterA,
@@ -70,7 +70,7 @@ impl Z80InstructionLocation {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Z80JumpCondition {
     Unconditionnal,
     Carry,
@@ -100,7 +100,7 @@ impl Z80JumpCondition {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum Z80Instruction {
 
     // misc operations
@@ -174,7 +174,7 @@ pub enum Z80Instruction {
     OutIncrement,
 
     // restart group
-    Restart(Z80InstructionLocation),
+    Restart(u16),
 }
 use Z80Instruction as ZI;
 
@@ -251,7 +251,7 @@ impl Z80Instruction {
             Z80Instruction::OutIncrement => format!("outi"),
             Z80Instruction::In(dst,src) => format!("in {},{}", dst.to_string(), src.to_string()),
 
-            Z80Instruction::Restart(addr)   => format!("rst {}", addr.to_string()),
+            Z80Instruction::Restart(addr)   => format!("rst {:02x}", addr),
         }
     }
 }
@@ -1083,14 +1083,14 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xF0) { Some(ZI::Return(ZJC::SignPositive)) }
 
         // Z80 manual table 17, restart group
-        else if self.match_byte(0xC7) { Some(ZI::Restart(ZIL::Immediate(0x00))) }
-        else if self.match_byte(0xCF) { Some(ZI::Restart(ZIL::Immediate(0x08))) }
-        else if self.match_byte(0xD7) { Some(ZI::Restart(ZIL::Immediate(0x10))) }
-        else if self.match_byte(0xDF) { Some(ZI::Restart(ZIL::Immediate(0x18))) }
-        else if self.match_byte(0xE7) { Some(ZI::Restart(ZIL::Immediate(0x20))) }
-        else if self.match_byte(0xEF) { Some(ZI::Restart(ZIL::Immediate(0x28))) }
-        else if self.match_byte(0xF7) { Some(ZI::Restart(ZIL::Immediate(0x30))) }
-        else if self.match_byte(0xFF) { Some(ZI::Restart(ZIL::Immediate(0x38))) }
+        else if self.match_byte(0xC7) { Some(ZI::Restart(0x00)) }
+        else if self.match_byte(0xCF) { Some(ZI::Restart(0x08)) }
+        else if self.match_byte(0xD7) { Some(ZI::Restart(0x10)) }
+        else if self.match_byte(0xDF) { Some(ZI::Restart(0x18)) }
+        else if self.match_byte(0xE7) { Some(ZI::Restart(0x20)) }
+        else if self.match_byte(0xEF) { Some(ZI::Restart(0x28)) }
+        else if self.match_byte(0xF7) { Some(ZI::Restart(0x30)) }
+        else if self.match_byte(0xFF) { Some(ZI::Restart(0x38)) }
 
         // Z80 rotate and shift, specialized register A opcodes
         else if self.match_byte(0x07) { Some(ZI::RotateLeftCarry(ZIL::RegisterA)) }

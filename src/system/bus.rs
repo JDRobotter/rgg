@@ -1,24 +1,31 @@
 
 use crate::memory::Rom;
 use crate::memory::Ram;
+use crate::system::VDP;
+use crate::cpu::Z80;
+
+use std::rc::Rc;
+use std::cell::{RefCell,RefMut};
 
 pub struct SystemBus {
     
-    rom:Rom,
-    work_ram:Ram,
+    rom: Rom,
+    work_ram: Ram,
 
+    pub vdp: VDP,
 }
 
 impl SystemBus {
 
-    pub fn new(rom: Rom) -> SystemBus {
+    pub fn new(rom:Rom) -> SystemBus {
         SystemBus {
             rom: rom,
             work_ram : Ram::new(),
+            vdp: VDP::new(),
         }
     }
 
-    pub fn io_read(&self, addr:u8) -> u8 {
+    pub fn io_read(&mut self, addr:u8) -> u8 {
         println!("IOR @{:02x}", addr);
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
@@ -31,22 +38,21 @@ impl SystemBus {
             0x3F => {
                 0
             },
-            // V counter / PSG
+            // V counter
             0x7E => {
-                // HACK
-                0
+                self.vdp.v_counter()
             },
-            // H counter / PSG
+            // H counter
             0x7F => {
-                0
+                self.vdp.h_counter()
             },
-            // VDP data
+            // VDP data port
             0xBE => {
-                0
+                self.vdp.read_data_port()
             },
-            // VDP control
+            // VDP control port
             0xBF | 0xBD => {
-                0
+                self.vdp.read_control_port()
             },
             // IO port A/B
             0xDC | 0xC0 => {
@@ -72,17 +78,19 @@ impl SystemBus {
             // IO port control
             0x3F => {
             },
-            // V counter / PSG
+            // SN 76489 data
             0x7E => {
             },
-            // H counter / PSG
+            // SN 76489 data (mirror)
             0x7F => {
             },
             // VDP data
             0xBE => {
+                self.vdp.write_data_port(data)
             },
             // VDP control
             0xBF | 0xBD => {
+                self.vdp.write_control_port(data)
             },
             // IO port A/B
             0xDC | 0xC0 => {

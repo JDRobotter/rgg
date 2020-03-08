@@ -1,27 +1,31 @@
 use crate::cpu::Z80;
 use crate::system::SystemBus;
 use crate::memory::Rom;
+use crate::system::VDP;
+
+use std::rc::Rc;
+use std::cell::RefCell;
 
 pub struct GameGear {
  
-    // bus
-    bus: SystemBus,
-    // Z80 CPU
+    // cpu
     cpu: Z80,
-
 }
 
 impl GameGear {
 
     pub fn new(rom: Rom) -> GameGear {
+
         GameGear {
-            bus: SystemBus::new(rom),
-            cpu: Z80::new(),
+            cpu: Z80::new(rom),
         }
     }
 
     pub fn step(&mut self) {
-        self.cpu.step(&mut self.bus);
+
+        self.cpu.step();
+
+        self.cpu.bus.vdp.step();
     }
 }
 
