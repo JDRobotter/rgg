@@ -15,6 +15,7 @@ pub enum Z80InstructionLocation {
     RegisterIndirectDE,
     RegisterIndirectIX,
     RegisterIndirectIY,
+    RegisterIndirectSP,
 
     RegisterAF,
     RegisterBC,
@@ -50,6 +51,7 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterIndirectDE => format!("(DE)"),
             Z80InstructionLocation::RegisterIndirectIX => format!("(IX)"),
             Z80InstructionLocation::RegisterIndirectIY => format!("(IY)"),
+            Z80InstructionLocation::RegisterIndirectSP => format!("(SP)"),
             Z80InstructionLocation::RegisterAF =>          format!("AF"),
             Z80InstructionLocation::RegisterBC =>          format!("BC"),
             Z80InstructionLocation::RegisterDE =>          format!("DE"),
@@ -719,9 +721,9 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x08) { Some(ZI::Exchange(ZIL::RegisterAF)) }
         else if self.match_byte(0xD9) { Some(ZI::ExchangeX) }
         else if self.match_byte(0xEB) { Some(ZI::Exchange2(ZIL::RegisterDE, ZIL::RegisterHL)) }
-        else if self.match_byte(0xE3) { Some(ZI::Exchange2(ZIL::RegisterSP, ZIL::RegisterHL)) }
-        else if self.match_bytes(&[0xDD,0xE3]) { Some(ZI::Exchange2(ZIL::RegisterSP, ZIL::RegisterIX)) }
-        else if self.match_bytes(&[0xFD,0xE3]) { Some(ZI::Exchange2(ZIL::RegisterSP, ZIL::RegisterIY)) }
+        else if self.match_byte(0xE3) { Some(ZI::Exchange2(ZIL::RegisterIndirectSP, ZIL::RegisterHL)) }
+        else if self.match_bytes(&[0xDD,0xE3]) { Some(ZI::Exchange2(ZIL::RegisterIndirectSP, ZIL::RegisterIX)) }
+        else if self.match_bytes(&[0xFD,0xE3]) { Some(ZI::Exchange2(ZIL::RegisterIndirectSP, ZIL::RegisterIY)) }
 
         // Z80 manual table 7 - 16 bit load group
 
