@@ -18,6 +18,7 @@ pub enum Z80InstructionLocation {
     RegisterIndirectSP,
 
     RegisterAF,
+    RegisterAFp,
     RegisterBC,
     RegisterDE,
     RegisterHL,
@@ -53,6 +54,7 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterIndirectIY => format!("(IY)"),
             Z80InstructionLocation::RegisterIndirectSP => format!("(SP)"),
             Z80InstructionLocation::RegisterAF =>          format!("AF"),
+            Z80InstructionLocation::RegisterAFp =>         format!("AF'"),
             Z80InstructionLocation::RegisterBC =>          format!("BC"),
             Z80InstructionLocation::RegisterDE =>          format!("DE"),
             Z80InstructionLocation::RegisterHL =>          format!("HL"),
@@ -160,8 +162,7 @@ pub enum Z80Instruction {
     ShiftRightArithmetic(Z80InstructionLocation),
     ShiftRightLogic(Z80InstructionLocation),
 
-    Exchange(Z80InstructionLocation),
-    Exchange2(Z80InstructionLocation,Z80InstructionLocation),
+    Exchange(Z80InstructionLocation,Z80InstructionLocation),
     ExchangeX,
 
     // general-purpose AF operation
@@ -239,8 +240,7 @@ impl Z80Instruction {
             Z80Instruction::ShiftRightArithmetic(r)     => format!("sra {}", r.to_string()),
             Z80Instruction::ShiftRightLogic(r)        => format!("srl {}", r.to_string()),
 
-            Z80Instruction::Exchange(a)     => format!("ex {}", a.to_string()),
-            Z80Instruction::Exchange2(a,b)  => format!("ex {} {}", a.to_string(), b.to_string()),
+            Z80Instruction::Exchange(a,b)  => format!("ex {} {}", a.to_string(), b.to_string()),
             Z80Instruction::ExchangeX       => format!("exx"),
 
             Z80Instruction::DecimalAdujstAccumulator    => format!("daa"),
@@ -718,12 +718,12 @@ impl Z80InstructionDecoder {
         else if self.match_bytes(&[0xED,0xB8]) { Some(ZI::LoadDecrementRepeat) }
 
         // Z80 manual table 8 - exchanges EX and EXX
-        else if self.match_byte(0x08) { Some(ZI::Exchange(ZIL::RegisterAF)) }
+        else if self.match_byte(0x08) { Some(ZI::Exchange(ZIL::RegisterAF, ZIL::RegisterAFp)) }
         else if self.match_byte(0xD9) { Some(ZI::ExchangeX) }
-        else if self.match_byte(0xEB) { Some(ZI::Exchange2(ZIL::RegisterDE, ZIL::RegisterHL)) }
-        else if self.match_byte(0xE3) { Some(ZI::Exchange2(ZIL::RegisterIndirectSP, ZIL::RegisterHL)) }
-        else if self.match_bytes(&[0xDD,0xE3]) { Some(ZI::Exchange2(ZIL::RegisterIndirectSP, ZIL::RegisterIX)) }
-        else if self.match_bytes(&[0xFD,0xE3]) { Some(ZI::Exchange2(ZIL::RegisterIndirectSP, ZIL::RegisterIY)) }
+        else if self.match_byte(0xEB) { Some(ZI::Exchange(ZIL::RegisterDE, ZIL::RegisterHL)) }
+        else if self.match_byte(0xE3) { Some(ZI::Exchange(ZIL::RegisterIndirectSP, ZIL::RegisterHL)) }
+        else if self.match_bytes(&[0xDD,0xE3]) { Some(ZI::Exchange(ZIL::RegisterIndirectSP, ZIL::RegisterIX)) }
+        else if self.match_bytes(&[0xFD,0xE3]) { Some(ZI::Exchange(ZIL::RegisterIndirectSP, ZIL::RegisterIY)) }
 
         // Z80 manual table 7 - 16 bit load group
 

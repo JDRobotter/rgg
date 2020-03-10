@@ -14,6 +14,7 @@ use Z80JumpCondition as ZJC;
 
 use std::ops;
 use std::convert::From;
+use std::mem;
 
 bitflags! {
     struct Z80StatusFlags: u8 {
@@ -149,6 +150,8 @@ pub struct Z80 {
 
     // CPU registers
     registers: Z80Registers,
+    // CPU alternate registers '
+    alternate_registers: Z80Registers,
     // CPU intruction decoder
     decoder: Z80InstructionDecoder,
 
@@ -165,6 +168,8 @@ impl Z80 {
             interrupt_mode: 0,
 
             registers: Z80Registers::new(),
+            alternate_registers: Z80Registers::new(),
+
             decoder: Z80InstructionDecoder::new(),
 
             ncycles: 0,
@@ -705,8 +710,9 @@ impl Z80 {
                 };
             },
 
-            ZI::Exchange2(opa, opb) => {
+            ZI::Exchange(opa, opb) => {
                 // EX DE, HL        p.124
+                // EX AF, AF'       p.125
                 // EX (SP), HL      p.127
                 // EX (SP), IX      p.128
                 // EX (SP), IY      p.129
@@ -720,7 +726,18 @@ impl Z80 {
 
             ZI::ExchangeX => {
                 // EXX      p.126
-                panic!("implement me !");
+                // BC <-> BC'
+                // DE <-> DE'
+                // HL <-> HL'
+                
+                let r = &mut self.registers;
+                let ar = &mut self.alternate_registers;
+                mem::swap(&mut r.b, &mut ar.b);
+                mem::swap(&mut r.c, &mut ar.c);
+                mem::swap(&mut r.d, &mut ar.d);
+                mem::swap(&mut r.e, &mut ar.e);
+                mem::swap(&mut r.h, &mut ar.h);
+                mem::swap(&mut r.l, &mut ar.l);
             },
 
             ZI::Add(opv) => {
@@ -1422,6 +1439,27 @@ impl Z80 {
                 // write byte on IO bus
                 self.bus.io_write(addr, byte);
             },
+
+            ZI::OutIncrement => {
+                // OUTI     p.309
+                
+                // (C) <- (HL)
+                // B  <- B - 1
+                // HL <- HL + 1
+                // Z flag is set if B becomes zero after decrement
+
+                let byte = self.bus.cpu_read(self.registers.HL());
+                self.bus.io_write(self.registers.c, byte);
+
+                self.registers.set_HL(Z80::add_i8_to_u16(self.registers.HL(), 1));
+                self.registers.b = Z80::add_i8_to_u8(self.registers.b, -1);
+
+                // update flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, true);
+                // zero
+                self.registers.flags.set(ZSF::Z, self.registers.b == 0);
+            }
 
             _ => {
                 panic!("unhandled instruction: {:?}", ins);
