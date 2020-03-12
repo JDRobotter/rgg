@@ -1,15 +1,12 @@
 use crate::cpu::Z80;
-use crate::system::SystemBus;
 use crate::memory::Rom;
 use crate::system::VDP;
 
-use std::rc::Rc;
-use std::cell::RefCell;
 
 pub struct GameGear {
  
     // cpu
-    cpu: Z80,
+    pub cpu: Z80,
 }
 
 impl GameGear {

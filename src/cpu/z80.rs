@@ -155,6 +155,11 @@ pub struct Z80 {
     // CPU intruction decoder
     decoder: Z80InstructionDecoder,
 
+    // last decoded instruction address
+    last_decoded_address: u16,
+    // last decoded instruction
+    last_decoded_instruction: Z80Instruction,
+
     // number of cycles
     ncycles: u64,
 }
@@ -172,6 +177,9 @@ impl Z80 {
 
             decoder: Z80InstructionDecoder::new(),
 
+            last_decoded_address: 0,
+            last_decoded_instruction: Z80Instruction::NOP,
+
             ncycles: 0,
         }
     }
@@ -186,9 +194,21 @@ impl Z80 {
 
     }
 
+    /// Return last decoded instruction dissassembly debug string
+    pub fn dissassembly_debug_string(&self) -> String {
+      format!("{:04x}: {:16}",
+          self.last_decoded_address,
+          self.last_decoded_instruction.to_string())
+    }
+
+    /// Return cpu registers debug string
+    pub fn registers_debug_string(&self) -> String {
+        self.registers.to_string()
+    }
+
     pub fn step(&mut self) {
 
-        let base_pc = self.registers.pc;
+        self.last_decoded_address = self.registers.pc;
 
         loop {
             // fetch one byte from program counter + displacement e
@@ -203,15 +223,11 @@ impl Z80 {
                     // execute decoded instruction
                     self.execute_instruction(ins);
                     
+                    // store instruction
+                    self.last_decoded_instruction = ins;
+
                     // increment cycles counter
                     self.ncycles += 1;
-
-                    // show decoded instruction and registers state
-                    println!("{:9} {:04x}: {:16} {}",
-                        self.ncycles,
-                        base_pc,
-                        ins.to_string(),
-                        self.registers.to_string());
 
                     break;
                 },
