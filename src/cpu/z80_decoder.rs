@@ -175,6 +175,7 @@ pub enum Z80Instruction {
     In(Z80InstructionLocation, Z80InstructionLocation),
     Out(Z80InstructionLocation, Z80InstructionLocation),
     OutIncrement,
+    OutIncrementRepeat,
 
     // restart group
     Restart(u16),
@@ -251,6 +252,7 @@ impl Z80Instruction {
 
             Z80Instruction::Out(dst,src) => format!("out {},{}", dst.to_string(), src.to_string()),
             Z80Instruction::OutIncrement => format!("outi"),
+            Z80Instruction::OutIncrementRepeat => format!("otir"),
             Z80Instruction::In(dst,src) => format!("in {},{}", dst.to_string(), src.to_string()),
 
             Z80Instruction::Restart(addr)   => format!("rst {:02x}", addr),
@@ -960,6 +962,12 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x24) { Some(ZI::Increment(ZIL::RegisterH)) }
         else if self.match_byte(0x2C) { Some(ZI::Increment(ZIL::RegisterL)) }
         else if self.match_byte(0x34) { Some(ZI::Increment(ZIL::RegisterHL)) }
+        else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x34), ZIB::Placeholder]) {
+            Some(ZI::Increment(ZIL::IndexedIX(self.matched_value(0))))
+        }
+        else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x34), ZIB::Placeholder]) {
+            Some(ZI::Increment(ZIL::IndexedIY(self.matched_value(0))))
+        }
 
         else if self.match_byte(0x3D) { Some(ZI::Decrement(ZIL::RegisterA)) }
         else if self.match_byte(0x05) { Some(ZI::Decrement(ZIL::RegisterB)) }
@@ -969,6 +977,12 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x25) { Some(ZI::Decrement(ZIL::RegisterH)) }
         else if self.match_byte(0x2D) { Some(ZI::Decrement(ZIL::RegisterL)) }
         else if self.match_byte(0x35) { Some(ZI::Decrement(ZIL::RegisterHL)) }
+        else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x35), ZIB::Placeholder]) {
+            Some(ZI::Decrement(ZIL::IndexedIX(self.matched_value(0))))
+        }
+        else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x35), ZIB::Placeholder]) {
+            Some(ZI::Decrement(ZIL::IndexedIY(self.matched_value(0))))
+        }
 
         else if self.match_special(&[ZIB::Byte(0xFE), ZIB::Placeholder]) {
             Some(ZI::Compare(ZIL::Immediate(self.matched_value(0))))
@@ -1130,6 +1144,7 @@ impl Z80InstructionDecoder {
         }
 
         else if self.match_bytes(&[0xED, 0xA3]) { Some(ZI::OutIncrement) }
+        else if self.match_bytes(&[0xED, 0xB3]) { Some(ZI::OutIncrementRepeat) }
 
         else { None }
     }

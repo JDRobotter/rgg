@@ -2,7 +2,7 @@
 extern crate bitflags;
 
 use ggez::{graphics, Context, ContextBuilder, GameResult};
-use ggez::conf::{WindowMode, FullscreenType};
+use ggez::conf::{WindowMode, WindowSetup, NumSamples, FullscreenType};
 use ggez::event::{self, EventHandler};
 
 extern crate clap;
@@ -16,6 +16,7 @@ mod cpu;
 mod system;
 mod memory;
 mod gui;
+mod bits;
 
 fn main() -> GameResult {
     let _matches = App::new("RGG emulator")
@@ -52,6 +53,13 @@ fn main() -> GameResult {
                                             max_height: 0.0,
                                             resizable: false,
                                             maximized: false,
+                                        })
+                                        .window_setup(WindowSetup {
+                                            title: "RGG".to_owned(),
+                                            samples: NumSamples::Zero,
+                                            vsync: false,
+                                            icon: "".to_owned(),
+                                            srgb: true,
                                         })
                                         .build()
                                         .unwrap();

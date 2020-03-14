@@ -547,7 +547,8 @@
  has the following layout:
 
  MSB          LSB
- ---pcvhnnnnnnnnn
+ ---p cvhn nnnn nnnn
+ 7654 3210 7654 3210
 
  - = Unused. Some games use these bits as flags for collision and damage
      zones. (such as Wonderboy in Monster Land, Zillion 2)

@@ -16,6 +16,8 @@ use std::ops;
 use std::convert::From;
 use std::mem;
 
+use std::time::{Duration, Instant};
+
 bitflags! {
     struct Z80StatusFlags: u8 {
         const S =   0b1000_0000;
@@ -160,6 +162,9 @@ pub struct Z80 {
     // last decoded instruction
     last_decoded_instruction: Z80Instruction,
 
+    // breakpoint address
+    breakpoint_address: Option<u16>,
+
     // number of cycles
     ncycles: u64,
 }
@@ -180,6 +185,9 @@ impl Z80 {
             last_decoded_address: 0,
             last_decoded_instruction: Z80Instruction::NOP,
 
+
+            breakpoint_address: None,
+
             ncycles: 0,
         }
     }
@@ -192,6 +200,17 @@ impl Z80 {
             return
         }
 
+        // only Z80 mode 1 is implemented
+        if self.interrupt_mode != 1 {
+            panic!("IRQ with mode other than 1 detected");
+        }
+
+        // decrement stack pointer
+        self.registers.sp -= 2;
+        // copy current contents of the Program Counter on top of the external memory stack
+        self.bus.cpu_write_u16(self.registers.sp, self.registers.pc);
+        // jump to IRQ address
+        self.registers.pc = 0x0038;
     }
 
     /// Return last decoded instruction dissassembly debug string
@@ -206,11 +225,18 @@ impl Z80 {
         self.registers.to_string()
     }
 
-    pub fn step(&mut self) {
+    /// Set CPU PC breakpoint
+    pub fn set_breakpoint(&mut self, addr:u16) {
+        self.breakpoint_address = Some(addr);
+    }
+
+    /// Step CPU by one instruction, return true on breakpoint
+    pub fn step(&mut self) -> bool {
 
         self.last_decoded_address = self.registers.pc;
 
         loop {
+
             // fetch one byte from program counter + displacement e
             let opb = self.bus.cpu_read(self.registers.pc);
             // increment PC
@@ -238,6 +264,14 @@ impl Z80 {
             };
 
         }//loop
+ 
+        // test breakpoint
+        if let Some(addr) = self.breakpoint_address {
+            addr == self.registers.pc
+        }
+        else {
+            false
+        }
     }
 
     pub fn debug_cpu_registers(&mut self) {
@@ -404,6 +438,28 @@ impl Z80 {
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
+    }
+
+    /// Perform a OUTI instruction
+    fn out_increment(&mut self) {
+        // OUTI     p.309
+        
+        // (C) <- (HL)
+        // B  <- B - 1
+        // HL <- HL + 1
+        // Z flag is set if B becomes zero after decrement
+
+        let byte = self.bus.cpu_read(self.registers.HL());
+        self.bus.io_write(self.registers.c, byte);
+
+        self.registers.set_HL(Z80::add_i8_to_u16(self.registers.HL(), 1));
+        self.registers.b = Z80::add_i8_to_u8(self.registers.b, -1);
+
+        // update flags
+        // add/sub
+        self.registers.flags.set(ZSF::N, true);
+        // zero
+        self.registers.flags.set(ZSF::Z, self.registers.b == 0);
     }
 
     /// Perform a LDI / LDD instruction incrementing by e
@@ -1081,16 +1137,24 @@ impl Z80 {
                 // SET b,(IX+d)     p.255
                 // SET b,(IY+d)     p.257
 
-                // set bit b an set Z flag accordingly
-
+                // set bit b
                 let mut byte = self.read_AND_operand(op);
-
-                byte &= (1<<b);
-
+                byte |= (1<<b);
                 self.write_AND_operand(op, byte);
 
                 // no condition bits are affected by this operation
             },
+
+            ZI::Reset(b, op) => {
+                // RES b,m      p.259
+
+                // clear bit b 
+                let mut byte = self.read_AND_operand(op);
+                byte &= !(1<<b);
+                self.write_AND_operand(op, byte);
+
+                // no condition bits are affected by this operation
+            }
 
             ZI::ShiftLeftArithmetic(opv) => {
                 // SLA  p.230
@@ -1385,7 +1449,7 @@ impl Z80 {
 
             ZI::Load16(dst, src) => {
                 // LD *,*   p.99 (16 bits load operations)
-                
+
                 // unpack value to load
                 let value = match src {
                     ZIL::Immediate16(w)     => { w },
@@ -1459,23 +1523,19 @@ impl Z80 {
             ZI::OutIncrement => {
                 // OUTI     p.309
                 
-                // (C) <- (HL)
-                // B  <- B - 1
-                // HL <- HL + 1
-                // Z flag is set if B becomes zero after decrement
+                self.out_increment()
+            },
 
-                let byte = self.bus.cpu_read(self.registers.HL());
-                self.bus.io_write(self.registers.c, byte);
-
-                self.registers.set_HL(Z80::add_i8_to_u16(self.registers.HL(), 1));
-                self.registers.b = Z80::add_i8_to_u8(self.registers.b, -1);
-
-                // update flags
-                // add/sub
-                self.registers.flags.set(ZSF::N, true);
-                // zero
-                self.registers.flags.set(ZSF::Z, self.registers.b == 0);
-            }
+            ZI::OutIncrementRepeat => {
+                // OTIR    p.311
+                
+                loop {
+                    self.out_increment();
+                    if(self.registers.b == 0) {
+                        break;
+                    }
+                }
+            },
 
             _ => {
                 panic!("unhandled instruction: {:?}", ins);
