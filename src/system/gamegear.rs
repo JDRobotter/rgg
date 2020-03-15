@@ -28,7 +28,7 @@ impl GameGear {
 
         let mut cpu = Z80::new(rom);
 
-        cpu.set_breakpoint(0x02eb);
+        cpu.set_breakpoint(0x0400);
 
         GameGear {
             cpu: cpu,
@@ -53,8 +53,11 @@ impl GameGear {
 
         // push last decoded instruction to debug
         let ass = self.cpu.dissassembly_debug_string();
+
         self.debug_file.write(ass.as_bytes());
         self.debug_file.write("\n".as_bytes());
+        self.debug_file.flush();
+
         self.instructions.push_front(ass);
 
         self.instructions.truncate(15);

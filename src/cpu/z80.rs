@@ -222,7 +222,12 @@ impl Z80 {
 
     /// Return cpu registers debug string
     pub fn registers_debug_string(&self) -> String {
-        self.registers.to_string()
+        
+        let i = if self.interrupt_enabled { "I" } else { "_" };
+        format!("IRQ {} | {}",
+            i,
+            self.registers.to_string()
+        )
     }
 
     /// Set CPU PC breakpoint
@@ -245,7 +250,10 @@ impl Z80 {
             // feed byte to instruction decoder
             match self.decoder.push(opb) {
                 Some(ins) => {
-
+                    
+                    println!("{:04x}: {:16}",
+                          self.last_decoded_address,
+                          ins.to_string());
                     // execute decoded instruction
                     self.execute_instruction(ins);
                     
@@ -272,10 +280,6 @@ impl Z80 {
         else {
             false
         }
-    }
-
-    pub fn debug_cpu_registers(&mut self) {
-        println!("{}", self.registers.to_string())
     }
 
     fn add_i8_to_u8(base:u8, displacement:i8) -> u8 {
@@ -840,6 +844,38 @@ impl Z80 {
                 self.registers.flags.set(ZSF::H, false);
             },
 
+            ZI::AddCarry(opv) => {
+                // ADC A,s  p.146
+
+                // unpack value to compare from operand
+                let value = self.read_AND_operand(opv);
+                
+                // use an i16 temporary accumulator
+                let mut temp :i16 = self.registers.a as i8 as i16;
+                // perform addition
+                temp += value as i8 as i16;
+                // add carry if flag is set
+                if self.registers.flags.contains(ZSF::C) {
+                    temp += 1;
+                }
+                // assign result to 8 bit register
+                self.registers.a = temp as u8;
+                
+                // update status flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, false);
+                // sign
+                self.registers.flags.set(ZSF::S, temp < 0);
+                // zero
+                self.registers.flags.set(ZSF::Z, temp == 0);
+                // overflow
+                self.registers.flags.set(ZSF::PV, (temp < -128) || (127 < temp));
+                // carry
+                self.registers.flags.set(ZSF::C, temp > 127);
+                // half-carry
+                self.registers.flags.set(ZSF::H, false);
+            },
+
             ZI::Add16(oplhs, oprhs) => {
                 // ADD HL, ss   p.188
                 // ADD IX, pp
@@ -969,7 +1005,18 @@ impl Z80 {
 
 
             },
+            
+            ZI::ComplementAccumulator => {
+                // CPL      p.168
+                //
+                // A <- ~A
+                
+                // bitwise not on register A
+                self.registers.a = !self.registers.a;
 
+                self.registers.flags.set(ZSF::H, true);
+                self.registers.flags.set(ZSF::N, true);
+            },
 
             ZI::NegateAccumulator => {
                 // NEG      p.176

@@ -7,6 +7,18 @@ use crate::cpu::Z80;
 use std::rc::Rc;
 use std::cell::{RefCell,RefMut};
 
+bitflags! {
+    struct BankControlRegister: u8 {
+        const WRITE_PROTECT = 0b1000_0000;
+        // unused               0100_0000
+        // unused               0010_0000
+        const WORK_RAM =      0b0001_0000;
+        const EXTERNAL_RAM =  0b0000_1000;
+        // unused               0000_0100
+        const BANK_OFFSET =   0b0000_0011;
+    }
+}
+
 struct RomMapper {
     // mapper multiplexer value
     mux: u8,
@@ -23,11 +35,12 @@ impl RomMapper {
         self.mux = mux
     }
 
-    fn read(&self, rom: &Rom, addr: u16) -> u8 {
+    fn read(&self, rom: &Rom, iaddr: u16) -> u8 {
         // mask address to 16k
-        let addr = addr & 0x3fff;
+        let addr = iaddr & 0x3fff;
         // prepend mux selection address
         let addr = addr | ( (self.mux as u16) << 14 );
+        println!("{:02x} {:04x} => {:04x}", self.mux, iaddr, addr);
         // read from rom
         rom.read(addr)
     }
@@ -98,7 +111,9 @@ impl SystemBus {
             0xDD | 0xC1 => {
                 0
             },
-            _ => { panic!("IO read from unknown address: {:02x}", addr) }
+            _ => { 
+                panic!("IO read from unknown address: {:02x}", addr);
+            },
         }
     }
 
@@ -137,7 +152,7 @@ impl SystemBus {
             0xDD | 0xC1 => {
             },
             _ => {
-                println!("IO write to unknown address: {:02x}", addr)
+                panic!("IO write to unknown address: {:02x}", addr)
             }
         }
     }
@@ -168,7 +183,8 @@ impl SystemBus {
         }
         else /*if addr < 0xffff */ {
             // work RAM, mirrored
-            self.work_ram.read(addr - 0xe000)
+            panic!("access to mirrored RAM");
+            //self.work_ram.read(addr - 0xe000)
         }
     }
 
@@ -178,7 +194,7 @@ impl SystemBus {
         //  $0000-$BFFF : Cartridge ROM (48k)
         //  $C000-$FFFF : Work RAM (8K, mirrored at $E000-$FFFF)
         if addr <= 0xbfff {
-            println!("no writing to ROM ! (@{:04x})", addr)
+            panic!("no writing to ROM ! (@{:04x})", addr)
         }
         else if addr <= 0xdfff {
             // work RAM
@@ -186,24 +202,33 @@ impl SystemBus {
         }
         else if addr < 0xfffc  {
             // work RAM, mirrored
-            self.work_ram.write(addr - 0xe000, data)
+            //self.work_ram.write(addr - 0xe000, data)
+            panic!("access to mirrored RAM");
         }
         // SEGA mapper control
         // https://www.smspower.org/Development/Mappers
         else if addr == 0xfffc {
             // RAM mapping and misc functions
+            let flags = BankControlRegister::from_bits_truncate(data);
+            // mapper control flags are not implemented
+            if data != 0x80 {
+                panic!("Unhandled mapper control");
+            }
         }
         else if addr == 0xfffd {
             // ROM mapping bank 0 configuration
             self.bank0_mapper.set(data);
+            println!("BANK MAP 0 {:02x}", data);
         }
         else if addr == 0xfffe {
             // ROM mapping bank 1 configuration
             self.bank1_mapper.set(data);
+            println!("BANK MAP 1 {:02x}", data);
         }
         else if addr == 0xffff {
             // ROM mapping bank 2 configuration
             self.bank2_mapper.set(data);
+            println!("BANK MAP 2 {:02x}", data);
         }
     }
 

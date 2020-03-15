@@ -816,7 +816,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x83) { Some(ZI::Add(ZIL::RegisterE)) }
         else if self.match_byte(0x84) { Some(ZI::Add(ZIL::RegisterH)) }
         else if self.match_byte(0x85) { Some(ZI::Add(ZIL::RegisterL)) }
-        else if self.match_byte(0x88) { Some(ZI::Add(ZIL::RegisterIndirectHL)) }
+        else if self.match_byte(0x86) { Some(ZI::Add(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x86), ZIB::Placeholder]) {
             Some(ZI::Add(ZIL::IndexedIX(self.matched_value(0))))
         }
@@ -1124,7 +1124,7 @@ impl Z80InstructionDecoder {
         }
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0xCB), ZIB::Placeholder, ZIB::Placeholder]) {
             self.decode_CB_bit_manipulation(self.matched_value(1),
-                Some(ZIL::IndexedIX(self.matched_value(0))))
+                Some(ZIL::IndexedIY(self.matched_value(0))))
         }
 
         // Z80 manual table 12, general-purpose AF operation
