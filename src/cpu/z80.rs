@@ -129,12 +129,13 @@ impl Z80Registers {
     }
 
     pub fn to_string(&self) -> String {
-        format!("A {:02x} |B {:02x} |D {:02x} |H {:02x} \
-                          |C {:02x} |E {:02x} |L {:02x} \
-                |PC {:04x} |SP {:04x} |IX {:04x} |IY {:04x} \
+        format!("A {:02x}   |B {:02x} |C {:02x} |D {:02x} |E {:02x} |H {:02x} |L {:02x}\n\
+                 AF {:04x} |BC {:04x}    |DE {:04x}    |HL {:04x}\n\
+                 PC {:04x} |SP {:04x}    |IX {:04x}    |IY {:04x}\n\
                 {}",
-                self.a, self.b , self.d , self.h,
-                         self.c , self.e , self.l,
+                self.a, self.b , self.c , self.d,
+                         self.e , self.h , self.l,
+                self.AF(), self.BC(), self.DE(), self.HL(),
                 self.pc, self.sp, self.ix, self.iy,
                 self.flags.to_string())
     }
@@ -224,7 +225,7 @@ impl Z80 {
     pub fn registers_debug_string(&self) -> String {
         
         let i = if self.interrupt_enabled { "I" } else { "_" };
-        format!("IRQ {} | {}",
+        format!("IRQ {}\n {}",
             i,
             self.registers.to_string()
         )
@@ -489,75 +490,124 @@ impl Z80 {
     }
 
     /// Perform an INC / DEC instruction incrementing by e
-    fn increment(&mut self,
+    fn increment8(&mut self,
                     op: Z80InstructionLocation,
                     e: i8) {
         // INC r    p.165
         // ...
-        // INC ss   p.198
-        // ...
         // DEC r    p.170
         // ...
-        // DEC ss   p.201
-        // ...
-        match(op) {
-            ZIL::RegisterA => { 
-                self.registers.a = Z80::add_i8_to_u8(self.registers.a, e) 
-            },
-            ZIL::RegisterB => {
-                self.registers.b = Z80::add_i8_to_u8(self.registers.b, e)
-            },
-            ZIL::RegisterC => {
-                self.registers.c = Z80::add_i8_to_u8(self.registers.c, e)
-            },
-            ZIL::RegisterD => {
-                self.registers.d = Z80::add_i8_to_u8(self.registers.d, e)
-            },
-            ZIL::RegisterE => {
-                self.registers.e = Z80::add_i8_to_u8(self.registers.e, e)
-            },
-            ZIL::RegisterH => {
-                self.registers.h = Z80::add_i8_to_u8(self.registers.h, e)
-            },
-            ZIL::RegisterL => {
-                self.registers.l = Z80::add_i8_to_u8(self.registers.l, e)
-            },
-            ZIL::RegisterBC => {
-                self.registers.set_BC(Z80::add_i8_to_u16(self.registers.BC(), e))
-            }
-            ZIL::RegisterDE => {
-                self.registers.set_DE(Z80::add_i8_to_u16(self.registers.DE(), e))
-            }
-            ZIL::RegisterHL => {
-                self.registers.set_HL(Z80::add_i8_to_u16(self.registers.HL(), e))
-            }
-            ZIL::RegisterSP => {
-                self.registers.sp = Z80::add_i8_to_u16(self.registers.sp, e)
-            }
+        
+        let temp = match(op) {
+            ZIL::RegisterA => { self.registers.a },
+            ZIL::RegisterB => { self.registers.b },
+            ZIL::RegisterC => { self.registers.c },
+            ZIL::RegisterD => { self.registers.d },
+            ZIL::RegisterE => { self.registers.e },
+            ZIL::RegisterH => { self.registers.h },
+            ZIL::RegisterL => { self.registers.l },
             ZIL::RegisterIndirectHL => {
                 // fetch byte on bus at address pointed by register HL
-                // and write incremented version
-                let byte = self.bus.cpu_read(self.registers.HL());
-                self.bus.cpu_write(self.registers.HL(), Z80::add_i8_to_u8(byte, e));
+                self.bus.cpu_read(self.registers.HL())
+            },
+            ZIL::IndexedIX(d) => {
+                // fetch byte on bus at address pointed by register IX + d
+                let addr = Z80::add_signed_u8_to_u16(self.registers.ix, d);
+                self.bus.cpu_read(addr)
+            },
+            ZIL::IndexedIY(d) => {
+                // fetch byte on bus at address pointed by register IY + d
+                let addr = Z80::add_signed_u8_to_u16(self.registers.iy, d);
+                self.bus.cpu_read(addr)
+            },
+            _ => { panic!("unhandled operand: {}", op.to_string()) }
+        };
+
+        // increment register
+        let mut temp = temp as i16;
+        temp += e as i16;
+        
+        // check for overflow
+        self.registers.flags.set(ZSF::PV, temp < 0 || temp > 255);
+        let temp = temp as u8;
+        // set zero flag
+        self.registers.flags.set(ZSF::Z, temp == 0);
+        // set sign flag
+        self.registers.flags.set(ZSF::S, (temp as i8) < 0);
+
+        match(op) {
+            ZIL::RegisterA => { self.registers.a = temp }
+            ZIL::RegisterB => { self.registers.b = temp }
+            ZIL::RegisterC => { self.registers.c = temp }
+            ZIL::RegisterD => { self.registers.d = temp }
+            ZIL::RegisterE => { self.registers.e = temp }
+            ZIL::RegisterH => { self.registers.h = temp }
+            ZIL::RegisterL => { self.registers.l = temp }
+            ZIL::RegisterIndirectHL => {
+                self.bus.cpu_write(self.registers.HL(), temp);
             },
             ZIL::IndexedIX(d) => {
                 // fetch byte on bus at address pointed by register IX + d
                 // and write incremented value
                 let addr = Z80::add_signed_u8_to_u16(self.registers.ix, d);
-                let byte = self.bus.cpu_read(addr);
-                self.bus.cpu_write(addr, Z80::add_i8_to_u8(byte, e));
+                self.bus.cpu_write(addr, temp);
             },
             ZIL::IndexedIY(d) => {
                 // fetch byte on bus at address pointed by register IY + d
                 // and write incremented value
-                let addr = Z80::add_signed_u8_to_u16(self.registers.ix, d);
-                let byte = self.bus.cpu_read(addr);
-                self.bus.cpu_write(addr, Z80::add_i8_to_u8(byte, e));
+                let addr = Z80::add_signed_u8_to_u16(self.registers.iy, d);
+                self.bus.cpu_write(addr, temp);
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
+       
     }
 
+    /// Perform an INC / DEC instruction incrementing by e
+    fn increment16(&mut self,
+                    op: Z80InstructionLocation,
+                    e: i8) {
+        // INC ss   p.198
+        // ...
+        // DEC ss   p.201
+        // ...
+
+        let temp = match(op) {
+            ZIL::RegisterBC => { self.registers.BC() }
+            ZIL::RegisterDE => { self.registers.DE() }
+            ZIL::RegisterHL => { self.registers.HL() }
+            ZIL::RegisterSP => { self.registers.sp }
+            _ => { panic!("unhandled operand: {}", op.to_string()) }
+        };
+
+        // increment register
+        let mut temp = temp as i32;
+        temp += e as i32;
+        
+        // check for overflow
+        self.registers.flags.set(ZSF::PV, temp < 0 || temp > 65535);
+        let temp = temp as u16;
+        // set zero flag
+        self.registers.flags.set(ZSF::Z, temp == 0);
+        // set sign flag
+        self.registers.flags.set(ZSF::S, (temp as i16) < 0);
+
+        match(op) {
+            ZIL::RegisterBC => {
+                self.registers.set_BC(temp)
+            }
+            ZIL::RegisterDE => {
+                self.registers.set_DE(temp)
+            }
+            ZIL::RegisterHL => {
+                self.registers.set_HL(temp)
+            }
+            ZIL::RegisterSP => {
+                self.registers.sp = temp
+            }
+            _ => { panic!("unhandled operand: {}", op.to_string()) }
+        }
+    }
 
     fn test_jump_condition(&self, condition: Z80JumpCondition) -> bool {
         match condition {
@@ -1047,17 +1097,29 @@ impl Z80 {
             ZI::Increment(op) => {
                 // INC r    p.165
                 // ...
+                self.increment8(op, 1);
+                // add/sub 
+                self.registers.flags.set(ZSF::N, false);
+            },
+
+            ZI::Increment16(op) => {
                 // INC ss   p.198
                 // ...
-                self.increment(op, 1)
+                self.increment16(op, 1);
+                // add/sub 
+                self.registers.flags.set(ZSF::N, false);
             },
 
             ZI::Decrement(op) => {
                 // DEC r    p.170
                 // ...
+                self.increment8(op, -1);
+            },
+
+            ZI::Decrement16(op) => {
                 // DEC ss   p.201
                 // ...
-                self.increment(op, -1)
+                self.increment16(op, -1);
             },
 
             ZI::Compare(opv) => {
@@ -1144,7 +1206,7 @@ impl Z80 {
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
 
-                let r = self.registers.a | value;
+                let r = self.registers.a ^ value;
                 self.registers.a = r;
 
                 // update status flags
@@ -1555,6 +1617,13 @@ impl Z80 {
 
                 let addr = match dst {
                     ZIL::Indirect(b) => b,
+                    ZIL::RegisterIndirectA => self.bus.io_read(self.registers.a),
+                    ZIL::RegisterIndirectB => self.bus.io_read(self.registers.b),
+                    ZIL::RegisterIndirectC => self.bus.io_read(self.registers.c),
+                    ZIL::RegisterIndirectD => self.bus.io_read(self.registers.d),
+                    ZIL::RegisterIndirectE => self.bus.io_read(self.registers.e),
+                    ZIL::RegisterIndirectH => self.bus.io_read(self.registers.h),
+                    ZIL::RegisterIndirectL => self.bus.io_read(self.registers.l),
                     _ => { panic!("unhandled operand: {}", dst.to_string()) }
                 };
                 

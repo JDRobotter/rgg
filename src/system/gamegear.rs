@@ -28,7 +28,7 @@ impl GameGear {
 
         let mut cpu = Z80::new(rom);
 
-        cpu.set_breakpoint(0x0400);
+        cpu.set_breakpoint(0x03dd);
 
         GameGear {
             cpu: cpu,

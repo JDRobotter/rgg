@@ -19,6 +19,19 @@ bitflags! {
     }
 }
 
+bitflags! {
+    struct IOPort00: u8 {
+        const STI  = 0b1000_0000;
+        const NJAP = 0b0100_0000;
+        const NNTS = 0b0010_0000;
+        // unused      0001_0000
+        // unused      0000_1000
+        // unused      0000_0100
+        // unused      0000_0010
+        // unused      0000_0001
+    }
+}
+
 struct RomMapper {
     // mapper multiplexer value
     mux: u8,
@@ -79,6 +92,19 @@ impl SystemBus {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
+            // IO port 00
+            0x00 => {
+                // return:
+                // - START/PAUSE OFF
+                // - overseas mode
+                // - NTSC mode
+                (IOPort00::NJAP).bits
+            },
+            // IO port 5
+            // serial communication mode setting
+            0x05 => {
+                0
+            },
             // memory control
             0x3E => {
                 panic!("not implemented")
@@ -123,13 +149,31 @@ impl SystemBus {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
+            // IO port 01
+            // read/write to the EXT connector
+            0x01 => {
+                // nothing to do
+            },
+            // IO port 02
+            0x02 => {
+                // nothing to do
+            },
+            // IO port 5
+            // serial communication mode setting
+            0x05 => {
+                // nothing to do
+            },
             // memory control
             0x3E => {
                 panic!("not implemented")
             },
             // IO port control
             0x3F => {
-                panic!("not implemented")
+                // not implemented
+            },
+            // SN76489 PSG
+            0x40 => {
+                // not implemented
             },
             // SN 76489 data
             0x7E => {
@@ -211,8 +255,8 @@ impl SystemBus {
             // RAM mapping and misc functions
             let flags = BankControlRegister::from_bits_truncate(data);
             // mapper control flags are not implemented
-            if data != 0x80 {
-                panic!("Unhandled mapper control");
+            if data & 0x7F != 0x00 {
+                panic!("Unhandled mapper control: {:02x}", data);
             }
         }
         else if addr == 0xfffd {

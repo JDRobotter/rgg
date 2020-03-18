@@ -249,9 +249,15 @@ impl VDP {
             // at the completion of the effective area
 
             if self.scanline == 0 {
+
+                // raise internal IRQ flag
+                self.status_register.insert(VDPStatusRegister::VBLANK);
+
                 return true;
             }
         }
+        // lower IRQ
+        self.status_register.remove(VDPStatusRegister::VBLANK);
         return false;
     }
 

@@ -10,6 +10,14 @@ pub enum Z80InstructionLocation {
     RegisterH,
     RegisterL,
 
+    RegisterIndirectA,
+    RegisterIndirectB,
+    RegisterIndirectC,
+    RegisterIndirectD,
+    RegisterIndirectE,
+    RegisterIndirectH,
+    RegisterIndirectL,
+
     RegisterIndirectHL,
     RegisterIndirectBC,
     RegisterIndirectDE,
@@ -47,6 +55,13 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterE =>          format!("E"),
             Z80InstructionLocation::RegisterH =>          format!("H"),
             Z80InstructionLocation::RegisterL =>          format!("L"),
+            Z80InstructionLocation::RegisterIndirectA =>  format!("(A)"),
+            Z80InstructionLocation::RegisterIndirectB =>  format!("(B)"),
+            Z80InstructionLocation::RegisterIndirectC =>  format!("(C)"),
+            Z80InstructionLocation::RegisterIndirectD =>  format!("(D)"),
+            Z80InstructionLocation::RegisterIndirectE =>  format!("(E)"),
+            Z80InstructionLocation::RegisterIndirectH =>  format!("(H)"),
+            Z80InstructionLocation::RegisterIndirectL =>  format!("(L)"),
             Z80InstructionLocation::RegisterIndirectHL => format!("(HL)"),
             Z80InstructionLocation::RegisterIndirectBC => format!("(BC)"),
             Z80InstructionLocation::RegisterIndirectDE => format!("(DE)"),
@@ -148,7 +163,9 @@ pub enum Z80Instruction {
     Xor(Z80InstructionLocation),
     Compare(Z80InstructionLocation),
     Increment(Z80InstructionLocation),
+    Increment16(Z80InstructionLocation),
     Decrement(Z80InstructionLocation),
+    Decrement16(Z80InstructionLocation),
 
     Bit(u8, Z80InstructionLocation),
     Set(u8, Z80InstructionLocation),
@@ -227,7 +244,9 @@ impl Z80Instruction {
             Z80Instruction::And(src)        => format!("and {}", src.to_string()),
             Z80Instruction::Compare(src)    => format!("cp  {}", src.to_string()),
             Z80Instruction::Increment(src)  => format!("inc {}", src.to_string()),
+            Z80Instruction::Increment16(src)  => format!("inc16 {}", src.to_string()),
             Z80Instruction::Decrement(src)  => format!("dec {}", src.to_string()),
+            Z80Instruction::Decrement16(src)  => format!("dec16 {}", src.to_string()),
 
             Z80Instruction::Bit(n,src)  => format!("bit {} {}", n, src.to_string()),
             Z80Instruction::Set(n,src)  => format!("set {} {}", n, src.to_string()),
@@ -494,19 +513,19 @@ impl Z80InstructionDecoder {
         else if self.match_bytes(&[0xED,0x62])  { Some(ZI::Sub16Carry(ZIL::RegisterHL, ZIL::RegisterHL)) }
         else if self.match_bytes(&[0xED,0x72])  { Some(ZI::Sub16Carry(ZIL::RegisterHL, ZIL::RegisterSP)) }
 
-        else if self.match_byte(0x03)           { Some(ZI::Increment(ZIL::RegisterBC)) }
-        else if self.match_byte(0x13)           { Some(ZI::Increment(ZIL::RegisterDE)) }
-        else if self.match_byte(0x23)           { Some(ZI::Increment(ZIL::RegisterHL)) }
-        else if self.match_byte(0x33)           { Some(ZI::Increment(ZIL::RegisterSP)) }
-        else if self.match_bytes(&[0xDD,0x23])  { Some(ZI::Increment(ZIL::RegisterIX)) }
-        else if self.match_bytes(&[0xFD,0x23])  { Some(ZI::Increment(ZIL::RegisterIY)) }
+        else if self.match_byte(0x03)           { Some(ZI::Increment16(ZIL::RegisterBC)) }
+        else if self.match_byte(0x13)           { Some(ZI::Increment16(ZIL::RegisterDE)) }
+        else if self.match_byte(0x23)           { Some(ZI::Increment16(ZIL::RegisterHL)) }
+        else if self.match_byte(0x33)           { Some(ZI::Increment16(ZIL::RegisterSP)) }
+        else if self.match_bytes(&[0xDD,0x23])  { Some(ZI::Increment16(ZIL::RegisterIX)) }
+        else if self.match_bytes(&[0xFD,0x23])  { Some(ZI::Increment16(ZIL::RegisterIY)) }
 
-        else if self.match_byte(0x0B)           { Some(ZI::Decrement(ZIL::RegisterBC)) }
-        else if self.match_byte(0x1B)           { Some(ZI::Decrement(ZIL::RegisterDE)) }
-        else if self.match_byte(0x2B)           { Some(ZI::Decrement(ZIL::RegisterHL)) }
-        else if self.match_byte(0x3B)           { Some(ZI::Decrement(ZIL::RegisterSP)) }
-        else if self.match_bytes(&[0xDD,0x2B])  { Some(ZI::Decrement(ZIL::RegisterIX)) }
-        else if self.match_bytes(&[0xFD,0x2B])  { Some(ZI::Decrement(ZIL::RegisterIY)) }
+        else if self.match_byte(0x0B)           { Some(ZI::Decrement16(ZIL::RegisterBC)) }
+        else if self.match_byte(0x1B)           { Some(ZI::Decrement16(ZIL::RegisterDE)) }
+        else if self.match_byte(0x2B)           { Some(ZI::Decrement16(ZIL::RegisterHL)) }
+        else if self.match_byte(0x3B)           { Some(ZI::Decrement16(ZIL::RegisterSP)) }
+        else if self.match_bytes(&[0xDD,0x2B])  { Some(ZI::Decrement16(ZIL::RegisterIX)) }
+        else if self.match_bytes(&[0xFD,0x2B])  { Some(ZI::Decrement16(ZIL::RegisterIY)) }
 
         // Z80 manual table 6 - 8 bit load group
         // destination register A
@@ -712,6 +731,14 @@ impl Z80InstructionDecoder {
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0x36), ZIB::Placeholder, ZIB::Placeholder]) {
             Some(ZI::Load(ZIL::IndexedIY(self.matched_value(0)), ZIL::Immediate(self.matched_value(1))))
         }
+
+        else if self.match_bytes(&[0xED,0x79]) { Some(ZI::Out(ZIL::RegisterIndirectA, ZIL::RegisterA)) }
+        else if self.match_bytes(&[0xED,0x41]) { Some(ZI::Out(ZIL::RegisterIndirectB, ZIL::RegisterA)) }
+        else if self.match_bytes(&[0xED,0x49]) { Some(ZI::Out(ZIL::RegisterIndirectC, ZIL::RegisterA)) }
+        else if self.match_bytes(&[0xED,0x51]) { Some(ZI::Out(ZIL::RegisterIndirectD, ZIL::RegisterA)) }
+        else if self.match_bytes(&[0xED,0x59]) { Some(ZI::Out(ZIL::RegisterIndirectE, ZIL::RegisterA)) }
+        else if self.match_bytes(&[0xED,0x69]) { Some(ZI::Out(ZIL::RegisterIndirectH, ZIL::RegisterA)) }
+        else if self.match_bytes(&[0xED,0x61]) { Some(ZI::Out(ZIL::RegisterIndirectL, ZIL::RegisterA)) }
 
         // Z80 manual table 9 - block transfer group
         else if self.match_bytes(&[0xED,0xA0]) { Some(ZI::LoadIncrement) }
