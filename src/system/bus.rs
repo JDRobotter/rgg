@@ -53,7 +53,7 @@ impl RomMapper {
         let addr = iaddr & 0x3fff;
         // prepend mux selection address
         let addr = addr | ( (self.mux as u16) << 14 );
-        println!("{:02x} {:04x} => {:04x}", self.mux, iaddr, addr);
+        //println!("{:02x} {:04x} => {:04x}", self.mux, iaddr, addr);
         // read from rom
         rom.read(addr)
     }
@@ -88,7 +88,6 @@ impl SystemBus {
     }
 
     pub fn io_read(&mut self, addr:u8) -> u8 {
-        println!("IOR @{:02x}", addr);
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
@@ -144,8 +143,6 @@ impl SystemBus {
     }
 
     pub fn io_write(&mut self, addr:u8, data:u8) {
-        println!("IOW @{:02x} {:02x}", addr, data);
-
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
@@ -161,6 +158,11 @@ impl SystemBus {
             // IO port 5
             // serial communication mode setting
             0x05 => {
+                // nothing to do
+            },
+            // IO port 6
+            // sound related stuff
+            0x06 => {
                 // nothing to do
             },
             // memory control
@@ -225,10 +227,12 @@ impl SystemBus {
             // work RAM
             self.work_ram.read(addr - 0xc000)
         }
-        else /*if addr < 0xffff */ {
+        else if addr <= 0xffff {
             // work RAM, mirrored
-            panic!("access to mirrored RAM");
-            //self.work_ram.read(addr - 0xe000)
+            self.work_ram.read(addr - 0xe000)
+        }
+        else {
+            panic!("CPU read defaulting for {:04x}", addr);
         }
     }
 
@@ -246,12 +250,14 @@ impl SystemBus {
         }
         else if addr < 0xfffc  {
             // work RAM, mirrored
-            //self.work_ram.write(addr - 0xe000, data)
-            panic!("access to mirrored RAM");
+            self.work_ram.write(addr - 0xe000, data)
         }
         // SEGA mapper control
         // https://www.smspower.org/Development/Mappers
         else if addr == 0xfffc {
+            // write to RAM, mirrored
+            self.work_ram.write(addr - 0xe000, data);
+
             // RAM mapping and misc functions
             let flags = BankControlRegister::from_bits_truncate(data);
             // mapper control flags are not implemented
@@ -260,19 +266,31 @@ impl SystemBus {
             }
         }
         else if addr == 0xfffd {
+            // write to RAM, mirrored
+            self.work_ram.write(addr - 0xe000, data);
+
             // ROM mapping bank 0 configuration
             self.bank0_mapper.set(data);
             println!("BANK MAP 0 {:02x}", data);
         }
         else if addr == 0xfffe {
+            // write to RAM, mirrored
+            self.work_ram.write(addr - 0xe000, data);
+
             // ROM mapping bank 1 configuration
             self.bank1_mapper.set(data);
             println!("BANK MAP 1 {:02x}", data);
         }
         else if addr == 0xffff {
+            // write to RAM, mirrored
+            self.work_ram.write(addr - 0xe000, data);
+
             // ROM mapping bank 2 configuration
             self.bank2_mapper.set(data);
             println!("BANK MAP 2 {:02x}", data);
+        }
+        else {
+            panic!("CPU write defaulting for {:04x}", addr);
         }
     }
 

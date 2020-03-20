@@ -252,9 +252,11 @@ impl Z80 {
             match self.decoder.push(opb) {
                 Some(ins) => {
                     
+                    /*
                     println!("{:04x}: {:16}",
                           self.last_decoded_address,
                           ins.to_string());
+                    */
                     // execute decoded instruction
                     self.execute_instruction(ins);
                     
@@ -871,59 +873,39 @@ impl Z80 {
 
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
-                
-                // use an i16 temporary accumulator
-                let mut temp :i16 = self.registers.a as i8 as i16;
-                // perform addition
-                temp += value as i8 as i16;
-                // assign result to 8 bit register
-                self.registers.a = temp as u8;
-                
-                // update status flags
-                // add/sub
-                self.registers.flags.set(ZSF::N, false);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < -128) || (127 < temp));
-                // carry
-                self.registers.flags.set(ZSF::C, temp > 127);
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
+                self.registers.a = value;
+                panic!("oskour");
             },
 
             ZI::AddCarry(opv) => {
                 // ADC A,s  p.146
-
+                
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
+                self.registers.a = value;
+                panic!("oskour");
+            },
+
+            ZI::Sub(opv) => {
+                // SUB s    p.153
                 
-                // use an i16 temporary accumulator
-                let mut temp :i16 = self.registers.a as i8 as i16;
-                // perform addition
-                temp += value as i8 as i16;
-                // add carry if flag is set
-                if self.registers.flags.contains(ZSF::C) {
-                    temp += 1;
-                }
-                // assign result to 8 bit register
-                self.registers.a = temp as u8;
+                // unpack value to compare from operand
+                let value = self.read_AND_operand(opv);
+                self.registers.a = value;               
+                panic!("oskour");
+            },
+
+            ZI::Compare(opv) => {
+                // CP s     p.163
                 
-                // update status flags
-                // add/sub
-                self.registers.flags.set(ZSF::N, false);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < -128) || (127 < temp));
-                // carry
-                self.registers.flags.set(ZSF::C, temp > 127);
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
+                // NDJD: CP seems to behave like SUB except it
+                // does not update accumulator with result
+                // only flags are updated
+                                
+                // unpack value to compare from operand
+                let value = self.read_AND_operand(opv);
+                self.registers.a = value;                              
+                panic!("oskour");
             },
 
             ZI::Add16(oplhs, oprhs) => {
@@ -973,41 +955,12 @@ impl Z80 {
                 // zero
                 self.registers.flags.set(ZSF::Z, temp == 0);
                 // overflow
-                self.registers.flags.set(ZSF::PV, (temp < -128) || (127 < temp));
+                self.registers.flags.set(ZSF::PV, (temp < std::i16::MIN as i32) || (temp > std::i16::MAX as i32));
                 // carry
-                self.registers.flags.set(ZSF::C, temp > 127);
+                self.registers.flags.set(ZSF::C, temp > std::i16::MAX as i32);
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
 
-
-            },
-
-            ZI::Sub(opv) => {
-                // SUB s    p.153
-                
-                // unpack value to compare from operand
-                let value = self.read_AND_operand(opv);
-                
-                // use an i16 temporary accumulator
-                let mut temp :i16 = self.registers.a as i8 as i16;
-                // perform substraction
-                temp -= value as i8 as i16;
-                // assign result to 8 bit register
-                self.registers.a = temp as u8;
-
-                // update status flags
-                // add/sub
-                self.registers.flags.set(ZSF::N, false);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < -128) || (127 < temp));
-                // carry
-                self.registers.flags.set(ZSF::C, temp < -128);
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
 
             },
 
@@ -1122,36 +1075,6 @@ impl Z80 {
                 self.increment16(op, -1);
             },
 
-            ZI::Compare(opv) => {
-                // CP s     p.163
-                
-                // unpack value to compare from operand
-                let value = self.read_AND_operand(opv);
-
-                // NDJD: CP seems to behave like SUB except it
-                // does not update accumulator with result
-                // only flags are updated
-
-                // use an i16 temporary accumulator
-                let mut temp :i16 = self.registers.a as i8 as i16;
-                // perform substraction
-                temp -= value as i8 as i16;
-
-                // update status flags
-                // add/sub
-                self.registers.flags.set(ZSF::N, true);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < -128) || (127 < temp));
-                // carry
-                self.registers.flags.set(ZSF::C, temp < -128);
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
-            },
-
             ZI::And(opv) => {
                 // AND s     p.157
                 
@@ -1184,6 +1107,10 @@ impl Z80 {
 
                 let r = self.registers.a | value;
                 self.registers.a = r;
+
+                if self.registers.pc == 0x04a8 + 1 {
+                    println!("OR {}", r);
+                }
 
                 // update status flags
                 // add/sub
@@ -1307,7 +1234,7 @@ impl Z80 {
                 // shift right
                 byte = byte >> 1;
                 // restore bit 7
-                byte = byte & bit7;
+                byte = byte | bit7;
 
                 // write byte back
                 self.write_AND_operand(opv,byte);
@@ -1367,7 +1294,7 @@ impl Z80 {
                 // shift left
                 byte = byte << 1;
                 // shove rotated bit in position 0
-                byte = byte & if bit7 == 0 { 0x00 } else { 0x01 };
+                byte = byte | if bit7 == 0 { 0x00 } else { 0x01 };
 
                 // write byte back
                 self.write_AND_operand(opv,byte);
@@ -1399,7 +1326,7 @@ impl Z80 {
                 // shift left
                 byte = byte << 1;
                 // shove rotated bit in position 0
-                byte = byte & if carry { 0x01 } else { 0x00 };
+                byte = byte | if carry { 0x01 } else { 0x00 };
 
                 // write byte back
                 self.write_AND_operand(opv,byte);
@@ -1431,7 +1358,7 @@ impl Z80 {
                 // shift right
                 byte = byte >> 1;
                 // shove rotated bit in position 7
-                byte = byte & if bit0 == 0 { 0x00 } else { 0x80 };
+                byte = byte | if bit0 == 0 { 0x00 } else { 0x80 };
 
                 // write byte back
                 self.write_AND_operand(opv,byte);
@@ -1463,7 +1390,7 @@ impl Z80 {
                 // shift right
                 byte = byte >> 1;
                 // shove rotated bit in position 7
-                byte = byte & if carry { 0x80 } else { 0x00 };
+                byte = byte | if carry { 0x80 } else { 0x00 };
 
                 // write byte back
                 self.write_AND_operand(opv,byte);
