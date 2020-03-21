@@ -489,7 +489,7 @@ impl VDP {
         match self.data_port_mux {
             VDPDataPortMux::VRAM => {
 
-                println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
+                //println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
 
                 self.vram[self.dp_address_register as usize] = byte;
             },
@@ -505,7 +505,7 @@ impl VDP {
                 
                 let odd = addr & 0x01 == 0x01;
                 if odd {
-                    println!("VDP CRAM W @{:02x} {:02x} {:02x}", addr, self.cram_latch, byte);
+                    //println!("VDP CRAM W @{:02x} {:02x} {:02x}", addr, self.cram_latch, byte);
                     // odd address, write latched byte then new byte
                     self.cram[addr as usize] = self.cram_latch;
                     self.increment_address_register();

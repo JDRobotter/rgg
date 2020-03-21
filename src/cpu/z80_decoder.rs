@@ -970,7 +970,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xBB) { Some(ZI::Compare(ZIL::RegisterE)) }
         else if self.match_byte(0xBC) { Some(ZI::Compare(ZIL::RegisterH)) }
         else if self.match_byte(0xBD) { Some(ZI::Compare(ZIL::RegisterL)) }
-        else if self.match_byte(0xBE) { Some(ZI::Compare(ZIL::RegisterHL)) }
+        else if self.match_byte(0xBE) { Some(ZI::Compare(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0xBE), ZIB::Placeholder]) {
             Some(ZI::Compare(ZIL::IndexedIX(self.matched_value(0))))
         }
@@ -988,7 +988,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x1C) { Some(ZI::Increment(ZIL::RegisterE)) }
         else if self.match_byte(0x24) { Some(ZI::Increment(ZIL::RegisterH)) }
         else if self.match_byte(0x2C) { Some(ZI::Increment(ZIL::RegisterL)) }
-        else if self.match_byte(0x34) { Some(ZI::Increment(ZIL::RegisterHL)) }
+        else if self.match_byte(0x34) { Some(ZI::Increment(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x34), ZIB::Placeholder]) {
             Some(ZI::Increment(ZIL::IndexedIX(self.matched_value(0))))
         }
@@ -1003,7 +1003,7 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x1D) { Some(ZI::Decrement(ZIL::RegisterE)) }
         else if self.match_byte(0x25) { Some(ZI::Decrement(ZIL::RegisterH)) }
         else if self.match_byte(0x2D) { Some(ZI::Decrement(ZIL::RegisterL)) }
-        else if self.match_byte(0x35) { Some(ZI::Decrement(ZIL::RegisterHL)) }
+        else if self.match_byte(0x35) { Some(ZI::Decrement(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0x35), ZIB::Placeholder]) {
             Some(ZI::Decrement(ZIL::IndexedIX(self.matched_value(0))))
         }

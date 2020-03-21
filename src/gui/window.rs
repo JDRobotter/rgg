@@ -29,7 +29,7 @@ impl EmulatorWindow {
         Ok(EmulatorWindow {
             gg: gg,
             font:font,
-            running: true,
+            running: false,
             run_one: false,
         })
     }
@@ -67,7 +67,7 @@ impl event::EventHandler for EmulatorWindow {
         while timer::check_update_time(ctx, DESIRED_FPS) {
             
             if self.running {
-                self.run(100);
+                self.run(3000);
             }
             else if self.run_one {
                 self.run(1);

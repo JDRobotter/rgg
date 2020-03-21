@@ -23,9 +23,12 @@ impl Rom {
     }
 
     /// Read one byte from ROM file
-    pub fn read(&self, addr:u16) -> u8 {
-        match self.data.get(addr as usize) {
-            Some(pb) => *pb,
+    pub fn read(&self, addr:usize) -> u8 {
+        match self.data.get(addr) {
+            Some(pb) => {
+                //println!("ROM {:08x} {:02x}", addr, *pb);
+                *pb
+            },
             None => {
                 panic!("out of bounds access in ROM");
             }

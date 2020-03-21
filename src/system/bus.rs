@@ -52,8 +52,7 @@ impl RomMapper {
         // mask address to 16k
         let addr = iaddr & 0x3fff;
         // prepend mux selection address
-        let addr = addr | ( (self.mux as u16) << 14 );
-        //println!("{:02x} {:04x} => {:04x}", self.mux, iaddr, addr);
+        let addr:usize = (addr as usize) | ( (self.mux as usize) << 14 );
         // read from rom
         rom.read(addr)
     }

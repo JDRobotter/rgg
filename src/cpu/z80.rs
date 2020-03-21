@@ -578,6 +578,8 @@ impl Z80 {
             ZIL::RegisterBC => { self.registers.BC() }
             ZIL::RegisterDE => { self.registers.DE() }
             ZIL::RegisterHL => { self.registers.HL() }
+            ZIL::RegisterIX => { self.registers.ix }
+            ZIL::RegisterIY => { self.registers.iy }
             ZIL::RegisterSP => { self.registers.sp }
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         };
@@ -597,16 +599,22 @@ impl Z80 {
         match(op) {
             ZIL::RegisterBC => {
                 self.registers.set_BC(temp)
-            }
+            },
             ZIL::RegisterDE => {
                 self.registers.set_DE(temp)
-            }
+            },
             ZIL::RegisterHL => {
                 self.registers.set_HL(temp)
-            }
+            },
             ZIL::RegisterSP => {
                 self.registers.sp = temp
-            }
+            },
+            ZIL::RegisterIX => {
+                self.registers.ix = temp
+            },
+            ZIL::RegisterIY => {
+                self.registers.iy = temp
+            },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
     }
@@ -623,6 +631,43 @@ impl Z80 {
             ZJC::SignNegative   => {  self.registers.flags.contains(ZSF::S) },
             ZJC::SignPositive   => { !self.registers.flags.contains(ZSF::S) },
         }
+    }
+
+    fn add8_with_carry(a: u8, b:u8, flags: &mut Z80StatusFlags) -> u8 {
+
+        // based on
+        // https://stackoverflow.com/questions/8034566/overflow-and-carry-flags-on-z80
+ 
+        let mut carry_out = false;
+
+        let acc =
+            if flags.contains(ZSF::C) {
+                // with carry
+                carry_out = (a >= 0xff - b);
+                a + b + 1
+            }
+            else {
+                // without carry
+                carry_out = (a > 0xff - b);
+                a + b
+        };
+    
+        // compute overflow by sign comparison
+        let mut carry_ins = ((a ^ b) ^ 0x80) & 0x80 != 0;
+        if carry_ins {
+            // if addend signs are the same
+            // overflow if the sum sign differs from the sign of either addends
+            carry_ins = ((acc ^ a) & 0x80) != 0;
+        }
+
+        // update flags
+        flags.set(ZSF::C, carry_out);
+        flags.set(ZSF::PV, carry_ins);
+
+        flags.set(ZSF::S, acc & 0x80 != 0);
+        flags.set(ZSF::Z, acc == 0);
+
+        acc
     }
 
     pub fn execute_instruction(&mut self,
@@ -873,8 +918,15 @@ impl Z80 {
 
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
-                self.registers.a = value;
-                panic!("oskour");
+
+                // ignore carry
+                self.registers.flags.remove(ZSF::C);
+                // perform addition
+                self.registers.a =
+                    Z80::add8_with_carry(self.registers.a, value, &mut self.registers.flags);
+
+                
+                self.registers.flags.set(ZSF::N, false);
             },
 
             ZI::AddCarry(opv) => {
@@ -882,8 +934,14 @@ impl Z80 {
                 
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
-                self.registers.a = value;
-                panic!("oskour");
+
+                // ignore carry
+                self.registers.flags.remove(ZSF::C);
+                // perform addition
+                self.registers.a =
+                    Z80::add8_with_carry(self.registers.a, value, &mut self.registers.flags);
+
+                self.registers.flags.set(ZSF::N, false);
             },
 
             ZI::Sub(opv) => {
@@ -891,8 +949,18 @@ impl Z80 {
                 
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
-                self.registers.a = value;               
-                panic!("oskour");
+
+                // SUB can be performed with ADD:
+                // a - b - c = a + ~b + 1 - c = a + ~b + !c
+                // toggle carry (Sub does not take carry into account)
+                self.registers.flags.insert(ZSF::C);
+                // perform subtraction
+                self.registers.a =
+                    Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
+                // toggle carry
+                self.registers.flags.toggle(ZSF::C);
+
+                self.registers.flags.set(ZSF::N, true);
             },
 
             ZI::Compare(opv) => {
@@ -901,11 +969,20 @@ impl Z80 {
                 // NDJD: CP seems to behave like SUB except it
                 // does not update accumulator with result
                 // only flags are updated
-                                
+
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
-                self.registers.a = value;                              
-                panic!("oskour");
+
+                // SUB can be performed with ADD:
+                // a - b - c = a + ~b + 1 - c = a + ~b + !c
+                // toggle carry (Sub does not take carry into account)
+                self.registers.flags.insert(ZSF::C);
+                // perform subtraction without setting accumulator
+                Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
+                // toggle carry
+                self.registers.flags.toggle(ZSF::C);
+
+                self.registers.flags.set(ZSF::N, true);
             },
 
             ZI::Add16(oplhs, oprhs) => {
@@ -1108,10 +1185,6 @@ impl Z80 {
                 let r = self.registers.a | value;
                 self.registers.a = r;
 
-                if self.registers.pc == 0x04a8 + 1 {
-                    println!("OR {}", r);
-                }
-
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, false);
@@ -1160,8 +1233,8 @@ impl Z80 {
                 // test bit b an set Z flag accordingly
 
                 let byte = self.read_AND_operand(op);
-
-                self.registers.flags.set(ZSF::Z, byte & (1<<b) != 0);
+                
+                self.registers.flags.set(ZSF::Z, byte & (1<<b) == 0);
                 self.registers.flags.set(ZSF::N, false);
                 self.registers.flags.set(ZSF::H, true);
 

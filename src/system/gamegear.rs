@@ -28,7 +28,7 @@ impl GameGear {
 
         let mut cpu = Z80::new(rom);
 
-        cpu.set_breakpoint(0x3ce);
+        //cpu.set_breakpoint(0x3ee);
 
         GameGear {
             cpu: cpu,
@@ -54,15 +54,15 @@ impl GameGear {
         // push last decoded instruction to debug
         let ass = self.cpu.dissassembly_debug_string();
 
-        self.debug_file.write(ass.as_bytes());
-        self.debug_file.write("\n".as_bytes());
-        self.debug_file.flush();
+        //self.debug_file.write(ass.as_bytes());
+        //self.debug_file.write("\n".as_bytes());
+        //self.debug_file.flush();
 
         self.instructions.push_front(ass);
 
         self.instructions.truncate(15);
         
-        if self.steps > 100 {
+        if self.steps > 20 {
             // currently increase one scaneline
             let irq = self.cpu.bus.vdp.step();
             self.steps = 0;
