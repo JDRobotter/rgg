@@ -270,7 +270,6 @@ impl SystemBus {
 
             // ROM mapping bank 0 configuration
             self.bank0_mapper.set(data);
-            println!("BANK MAP 0 {:02x}", data);
         }
         else if addr == 0xfffe {
             // write to RAM, mirrored
@@ -278,7 +277,6 @@ impl SystemBus {
 
             // ROM mapping bank 1 configuration
             self.bank1_mapper.set(data);
-            println!("BANK MAP 1 {:02x}", data);
         }
         else if addr == 0xffff {
             // write to RAM, mirrored
@@ -286,7 +284,6 @@ impl SystemBus {
 
             // ROM mapping bank 2 configuration
             self.bank2_mapper.set(data);
-            println!("BANK MAP 2 {:02x}", data);
         }
         else {
             panic!("CPU write defaulting for {:04x}", addr);

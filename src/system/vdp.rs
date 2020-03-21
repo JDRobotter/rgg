@@ -372,16 +372,20 @@ impl VDP {
             let bs3 = Bits::from(self.read_vram_u8(pb + 3));
 
             // iterate over 8 bits
-            for x in 0..8 {
+            for k in 0..8 {
+                
                 // build color code with masked bits from each band
                 let mut cc:u8 = 0;
-                if bs0.is_set(x) { cc |= 0x01 }
-                if bs1.is_set(x) { cc |= 0x02 }
-                if bs2.is_set(x) { cc |= 0x04 }
-                if bs3.is_set(x) { cc |= 0x08 }
+                if bs0.is_set(k) { cc |= 0x01 }
+                if bs1.is_set(k) { cc |= 0x02 }
+                if bs2.is_set(k) { cc |= 0x04 }
+                if bs3.is_set(k) { cc |= 0x08 }
                 
                 // get pixel color from palette
                 let color = self.get_color_from_palette(0,cc);
+
+                // bit 7 is x=0, bit 0 is x=7
+                let x = 7 - k;
                 // set pixel color
                 p.set(x, band as u8, color);
 
@@ -505,11 +509,9 @@ impl VDP {
                 
                 let odd = addr & 0x01 == 0x01;
                 if odd {
-                    //println!("VDP CRAM W @{:02x} {:02x} {:02x}", addr, self.cram_latch, byte);
                     // odd address, write latched byte then new byte
-                    self.cram[addr as usize] = self.cram_latch;
-                    self.increment_address_register();
-                    self.cram[addr as usize] = byte;
+                    self.cram[(addr) as usize] = self.cram_latch;
+                    self.cram[(addr-1) as usize] = byte;
                 }
                 else {
                     // even address, store received byte in latch
