@@ -157,6 +157,78 @@ impl event::EventHandler for EmulatorWindow {
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
+
+        // -- draw GG pattern table --
+        //
+        for py in 0..16 {
+            for px in 0..16 {
+                
+                // pattern index
+                let pidx = py*16 + px;
+                // fetch pattern image from VRAM (force palette 0)
+                let pattern = self.gg.cpu.bus.vdp.get_tile_pattern(pidx, 0);
+
+                // allocate a buffer for the RGBA image
+                let mut rgba: [u8;8*8*4] = [0;8*8*4];
+                for y in 0..8 {
+                    for x in 0..8 {
+                        let color = pattern.get(x,y);
+                        let k = y*8+x;
+                        rgba[4*k + 0] = color.red();
+                        rgba[4*k + 1] = color.green();
+                        rgba[4*k + 2] = color.blue();
+                        rgba[4*k + 3] = 0xff;
+                    }
+                }
+
+                // draw image
+                let bx = sw + 40.0;
+                let by = 350.0;
+                let im = graphics::Image::from_rgba8(ctx, 8, 8, &rgba)?;
+                graphics::draw(ctx, &im,
+                    graphics::DrawParam::new()
+                        .dest(cgmath::Point2::new(bx + (px as f32)*8.0,
+                                                    by + (py as f32)*8.0)))?;
+
+            }
+        }
+
+        // -- draw GG sprite table --
+        //
+        for py in 0..16 {
+            for px in 0..16 {
+                
+                // pattern index
+                let pidx = py*16 + px;
+                // fetch pattern image from VRAM
+                let pattern = self.gg.cpu.bus.vdp.get_sprite_pattern(pidx);
+
+                // allocate a buffer for the RGBA image
+                let mut rgba: [u8;8*8*4] = [0;8*8*4];
+                for y in 0..8 {
+                    for x in 0..8 {
+                        let color = pattern.get(x,y);
+                        let k = y*8+x;
+                        rgba[4*k + 0] = color.red();
+                        rgba[4*k + 1] = color.green();
+                        rgba[4*k + 2] = color.blue();
+                        rgba[4*k + 3] = 0xff;
+                    }
+                }
+
+                // draw image
+                let bx = sw + 40.0 + 16.0*8.0 + 40.0;
+                let by = 350.0;
+                let im = graphics::Image::from_rgba8(ctx, 8, 8, &rgba)?;
+                graphics::draw(ctx, &im,
+                    graphics::DrawParam::new()
+                        .dest(cgmath::Point2::new(bx + (px as f32)*8.0,
+                                                    by + (py as f32)*8.0)))?;
+
+            }
+        }
+
+
         graphics::present(ctx)
     }
 

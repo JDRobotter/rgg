@@ -1098,6 +1098,24 @@ impl Z80 {
                 self.registers.flags.set(ZSF::N, true);
             },
 
+            ZI::ComplementCarryFlag => {
+                // CCF      p.170
+                //
+                // CY <- /CY
+
+                // status register carry flag is inverted
+                self.registers.flags.toggle(ZSF::C);
+            },
+
+            ZI::SetCarryFlag => {
+                // SCF      p.171
+                //
+                // CY <- 1
+
+                // status register carry flag is set
+                self.registers.flags.insert(ZSF::C);
+            },
+
             ZI::NegateAccumulator => {
                 // NEG      p.176
             

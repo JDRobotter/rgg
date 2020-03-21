@@ -68,6 +68,11 @@ bitflags! {
     }
 }
 
+enum SpriteSize {
+    SIZE_8x8,
+    SIZE_8x16,
+}
+
 /// Background tile table entry
 #[derive(Debug)]
 struct BgTile {
@@ -112,7 +117,8 @@ impl BgTile {
 pub struct Color {
     r:u8,
     g:u8,
-    b:u8
+    b:u8,
+    a:bool,
 }
 
 impl Color {
@@ -120,8 +126,22 @@ impl Color {
         Color {
             r:r,
             g:g,
-            b:b
+            b:b,
+            a:true,
         }
+    }
+
+    fn transparent() -> Color {
+        Color {
+            r:0,
+            g:0,
+            b:0,
+            a:false
+        }
+    }
+
+    fn alpha(&self) -> bool {
+        self.a
     }
 
     fn black() -> Color {
@@ -141,7 +161,7 @@ impl Color {
 }
 
 /// 8x8 pattern pixel block
-struct Pattern {
+pub struct Pattern {
     pixels: [Color;64],
 }
 
@@ -158,8 +178,28 @@ impl Pattern {
         self.pixels[8*y + x] = color;
     }
 
-    fn get(&self, x:usize, y:usize) -> Color {
+    pub fn get(&self, x:usize, y:usize) -> Color {
         self.pixels[8*y + x]
+    }
+}
+
+/// Sprite attributes
+struct Sprite {
+    // vertical position
+    x: u8,
+    // horizontal position
+    y: u8,
+    // character number
+    n: u8,
+}
+
+impl Sprite {
+    fn new(x:u8, y:u8, n:u8) -> Sprite {
+        Sprite {
+            x:x,
+            y:y,
+            n:n,
+        }
     }
 }
 
@@ -272,6 +312,16 @@ impl VDP {
         (h << 8) | l
     }
 
+    fn get_sprite_size(&self) -> SpriteSize {
+        let bsize = 
+            VDPRegisterModeControl2::from_bits_truncate(self.registers[1])
+                                        .contains(VDPRegisterModeControl2::SIZE);
+        match bsize {
+            false => SpriteSize::SIZE_8x8,
+            true => SpriteSize::SIZE_8x16,
+        }
+    }
+
     fn sprite_generator_table_base_address(&self) -> u16 {
         // VDP register 6 contains sprite generator base address upper bit
         // D7 - No effect
@@ -286,10 +336,10 @@ impl VDP {
         let rb = self.registers[6];
 
         if (rb & 0b0000_0100) != 0 {
-            0x0
+            0x2000
         }
         else {
-            0x2000
+            0x0
         }
     }
 
@@ -312,13 +362,36 @@ impl VDP {
         addr << 10
     }
 
+    fn sprite_attribute_table_base_address(&self) -> u16 {
+        // VDP register 5 contains sprite generator base address upper bit
+        // D7 - No effect
+        // D6 - Bit 13 of the table address
+        // D5 - Bit 12 of the table address
+        // D4 - Bit 11 of the table address
+        // D3 - Bit 10 of the table address
+        // D2 - Bit 9 of the table address
+        // D1 - Bit 8 of the table address
+        // D0 - No effect
+
+        let rb = self.registers[5];
+
+        // mask unused bits
+        let addr = (rb & 0x7e) as u16;
+        // shift bits 6-1 to 13-8
+        addr << 7
+    }
+
     fn blit_to_screen(&mut self, bx:usize, by:usize, p:Pattern) {
         for dy in 0..8 {
             let y = by + dy;
             for dx in 0..8 {
-                let x = bx + dx;
-                if (x < 256) && (y < 224) {
-                    self.screen[256*y + x] = p.get(dx,dy);
+                let color = p.get(dx,dy);
+                // skip is color is transparent
+                if color.alpha() {
+                    let x = bx + dx;
+                    if (x < 256) && (y < 224) {
+                        self.screen[256*y + x] = color;
+                    }
                 }
             }
         }
@@ -327,8 +400,9 @@ impl VDP {
     pub fn render(&mut self) {
 
         // initialize pointer with name table base address
-        let mut p: u16 = 0x3800;//self.name_table_base_address();
-
+        let mut p: u16 = self.name_table_base_address();
+        
+        // -- render tiles --
         for y in 0..28 {
             for x in 0..32 {
                 // read background tile information from table
@@ -336,9 +410,12 @@ impl VDP {
                 let bg = BgTile::from(word);
                 
                 // fetch 8x8 pixel pattern from pattern generator
-                let pattern = self.get_pattern(bg.pattern);
-                
-                // blit pattern to screen
+                let pattern = self.get_tile_pattern(
+                                    bg.pattern,
+                                    if bg.palette { 1 } else { 0 }
+                );
+             
+                // blit patterns to screen
                 let px:usize = x*8;
                 let py:usize = y*8; 
                 self.blit_to_screen(px,py,pattern);
@@ -347,19 +424,104 @@ impl VDP {
             }
         }
 
+        // fetch sprite size mode (8x8 or 8x16)
+        let spsz = self.get_sprite_size();
+
+        // -- render sprites --
+        for sidx in 0..32 {
+
+            // read sprite information and pattern from table
+            let sp = self.get_sprite(sidx);
+ 
+            let sx = sp.x as usize;
+            let sy = sp.y as usize;
+            match sx {
+                0xd0 => {
+                    // at a vertical pos., 0xd0 has the meaning of an end code
+                    break;
+                },
+                0xe0 => {
+                    // at a vertical pos., 0xe0 prevent a sprite from being displayed
+                    continue;
+                },
+                _ => {
+                    // nothing to do
+                }
+            };
+
+            // at a vertical position, 0xd0 has the meaning of an end code
+
+            match spsz {
+                SpriteSize::SIZE_8x8 => {
+                    // fetch pattern
+                    let pattern = self.get_sprite_pattern(sp.n);
+                    // blit sprite pattern to screen
+                    self.blit_to_screen(sx,sy,pattern);
+                },
+                SpriteSize::SIZE_8x16 => {
+                    // from Sega GG HW ref. man. (rev1) p.32
+                    
+                    // compute masked pattern number
+                    let mn = sp.n & 0x7f;
+                    // fetch pattern A and pattern B
+                    let pa = self.get_sprite_pattern(mn | 0x00);
+                    let pb = self.get_sprite_pattern(mn | 0x01);
+                    
+                    // blit pattern A
+                    self.blit_to_screen(sx,sy,pa);
+                    // blit pattern B (8 px down from pattern A)
+                    self.blit_to_screen(sx,sy+8,pb);
+                },
+            }
+
+        }
+
     }
 
     pub fn screen_get_pixel(&self, x:usize, y:usize) -> Color {
         self.screen[y*256 + x]
     }
 
+    /// Return a sprite from table
+    pub fn get_sprite(&self, idx:u16) -> Sprite {
+
+        // get sprite attribute table base address
+        let baddr = self.sprite_attribute_table_base_address();
+
+        // fetch sprite position and character number from table
+        let y = self.read_vram_u8(baddr + idx);
+        let x = self.read_vram_u8(baddr + 0x80 + 2*idx + 0);
+        let n = self.read_vram_u8(baddr + 0x80 + 2*idx + 1);
+
+        Sprite::new(x,y,n)
+    }
+
+    pub fn get_sprite_pattern(&self, idx: u8) -> Pattern {
+        // color palette 1 is always selected for sprites
+        self.get_pattern(
+            self.sprite_generator_table_base_address(),
+            idx as u16,
+            1,
+            true)
+    }
+
+    pub fn get_tile_pattern(&self, idx: u16, p:u8) -> Pattern {
+        self.get_pattern(0x0000, idx, p, false)
+    }
+
     /// Return an 8 x 8 pattern of 32 bits RGBA pixels
-    fn get_pattern(&self, idx: u16) -> Pattern {
+    /// from base_address (can be sprite OR pattern tiles)
+    pub fn get_pattern(&self,
+                        base_addr:u16,
+                        idx: u16,
+                        palette:u8,
+                        is_color0_transparent:bool )-> Pattern {
+
         let mut p = Pattern::new();
  
         // each pattern is 32 bytes long
         // pattern generator base address is 0x0000
-        let pa = idx * 32;
+        let pa = base_addr + idx * 32;
 
         // data is organized by bands of 4 bytes
         for band in 0..8 {
@@ -382,7 +544,13 @@ impl VDP {
                 if bs3.is_set(k) { cc |= 0x08 }
                 
                 // get pixel color from palette
-                let color = self.get_color_from_palette(0,cc);
+                let color = if is_color0_transparent && (cc == 0) {
+                    // color 0 is TRANSPARENT for sprites
+                    Color::transparent()
+                }
+                else {
+                    self.get_color_from_palette(palette, cc)
+                };
 
                 // bit 7 is x=0, bit 0 is x=7
                 let x = 7 - k;
@@ -534,7 +702,7 @@ impl VDP {
 
     fn execute_command_word(&mut self, addr:u16, code:u8) {
 
-        println!("VDP COMMAND @{:04x} C{}",addr,code);
+        //println!("VDP COMMAND @{:04x} C{}",addr,code);
 
         match code {
             0 => {
@@ -583,7 +751,7 @@ impl VDP {
 
     fn write_register(&mut self, n:u8, byte:u8) {
 
-        println!("VDP WRITE REG @{:02x} {:02x} {:08b}",n,byte,byte);
+        //println!("VDP WRITE REG @{:02x} {:02x} {:08b}",n,byte,byte);
 
         // write to register
         self.registers[n as usize] = byte;
