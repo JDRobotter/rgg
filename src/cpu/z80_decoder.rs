@@ -501,6 +501,16 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x29)           { Some(ZI::Add16(ZIL::RegisterHL, ZIL::RegisterHL)) }
         else if self.match_byte(0x39)           { Some(ZI::Add16(ZIL::RegisterHL, ZIL::RegisterSP)) }
 
+        else if self.match_bytes(&[0xDD, 0x09]) { Some(ZI::Add16(ZIL::RegisterIX, ZIL::RegisterBC)) }
+        else if self.match_bytes(&[0xDD, 0x19]) { Some(ZI::Add16(ZIL::RegisterIX, ZIL::RegisterDE)) }
+        else if self.match_bytes(&[0xDD, 0x39]) { Some(ZI::Add16(ZIL::RegisterIX, ZIL::RegisterSP)) }
+        else if self.match_bytes(&[0xDD, 0x29]) { Some(ZI::Add16(ZIL::RegisterIX, ZIL::RegisterIX)) }
+
+        else if self.match_bytes(&[0xFD, 0x09]) { Some(ZI::Add16(ZIL::RegisterIY, ZIL::RegisterBC)) }
+        else if self.match_bytes(&[0xFD, 0x19]) { Some(ZI::Add16(ZIL::RegisterIY, ZIL::RegisterDE)) }
+        else if self.match_bytes(&[0xFD, 0x39]) { Some(ZI::Add16(ZIL::RegisterIY, ZIL::RegisterSP)) }
+        else if self.match_bytes(&[0xFD, 0x29]) { Some(ZI::Add16(ZIL::RegisterIY, ZIL::RegisterIY)) }
+
         // ADC HL
         else if self.match_bytes(&[0xED,0x4A])  { Some(ZI::Add16Carry(ZIL::RegisterHL, ZIL::RegisterBC)) }
         else if self.match_bytes(&[0xED,0x5A])  { Some(ZI::Add16Carry(ZIL::RegisterHL, ZIL::RegisterDE)) }

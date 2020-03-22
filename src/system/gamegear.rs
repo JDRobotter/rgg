@@ -1,6 +1,7 @@
 use crate::cpu::Z80;
 use crate::memory::Rom;
 use crate::system::VDP;
+use crate::system::JoystickButton;
 
 use std::collections::VecDeque;
 
@@ -28,7 +29,8 @@ impl GameGear {
 
         let mut cpu = Z80::new(rom);
 
-        //cpu.set_breakpoint(0x5ad);
+        //cpu.set_breakpoint(0x09);
+        //cpu.set_breakpoint(0x27e);
 
         GameGear {
             cpu: cpu,
@@ -36,6 +38,14 @@ impl GameGear {
             debug_file: File::create("/tmp/rgg.trace").unwrap(),
             steps: 0,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.cpu.reset();
+    }
+
+    pub fn set_button_state(&mut self, b:JoystickButton, state:bool) {
+        self.cpu.bus.joystick.set_state(b,state)
     }
 
     pub fn step(&mut self) -> bool {

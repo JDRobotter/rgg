@@ -164,7 +164,7 @@ pub struct Z80 {
     last_decoded_instruction: Z80Instruction,
 
     // breakpoint address
-    breakpoint_address: Option<u16>,
+    breakpoint_addresses: Vec<u16>,
 
     // number of cycles
     ncycles: u64,
@@ -187,10 +187,14 @@ impl Z80 {
             last_decoded_instruction: Z80Instruction::NOP,
 
 
-            breakpoint_address: None,
+            breakpoint_addresses: Vec::new(),
 
             ncycles: 0,
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.registers.pc = 0;
     }
 
     /// Generate an hardware interrupt on CPU
@@ -233,7 +237,7 @@ impl Z80 {
 
     /// Set CPU PC breakpoint
     pub fn set_breakpoint(&mut self, addr:u16) {
-        self.breakpoint_address = Some(addr);
+        self.breakpoint_addresses.push(addr);
     }
 
     /// Step CPU by one instruction, return true on breakpoint
@@ -277,12 +281,7 @@ impl Z80 {
         }//loop
  
         // test breakpoint
-        if let Some(addr) = self.breakpoint_address {
-            addr == self.registers.pc
-        }
-        else {
-            false
-        }
+        self.breakpoint_addresses.contains(&self.registers.pc)
     }
 
     fn add_i8_to_u8(base:u8, displacement:i8) -> u8 {
@@ -324,7 +323,7 @@ impl Z80 {
             v = v & (v-1);
         }
         
-        parity
+        !parity
     }
 
     fn read_AND_operand(&self,
@@ -389,6 +388,8 @@ impl Z80 {
             ZIL::RegisterHL => { self.registers.HL() },
             ZIL::RegisterIX => { self.registers.ix },
             ZIL::RegisterIY => { self.registers.iy },
+            ZIL::RegisterAF => { self.registers.AF() },
+            ZIL::RegisterAFp => { self.alternate_registers.AF() },
             ZIL::RegisterIndirectSP => {
                 // fetch byte on bus at address pointed by register SP
                 self.bus.cpu_read_u16(self.registers.sp)
@@ -405,6 +406,8 @@ impl Z80 {
             ZIL::RegisterHL => { self.registers.set_HL(word) },
             ZIL::RegisterIX => { self.registers.ix = word },
             ZIL::RegisterIY => { self.registers.iy = word },
+            ZIL::RegisterAF => { self.registers.set_AF(word) },
+            ZIL::RegisterAFp => { self.alternate_registers.set_AF(word) },
             ZIL::RegisterIndirectSP => {
                 // fetch byte on bus at address pointed by register SP
                 self.bus.cpu_write_u16(self.registers.sp, word)
@@ -491,10 +494,20 @@ impl Z80 {
         self.registers.flags.set(ZSF::N, false);
     }
 
-    /// Perform an INC / DEC instruction incrementing by e
+    /// Perform an DEC instruction decrementing by e
+    fn decrement8(&mut self,
+                    op: Z80InstructionLocation,
+                    e: u8) {
+    
+        self.registers.flags.toggle(ZSF::C);
+        self.increment8(op, !(e as u8));
+        self.registers.flags.toggle(ZSF::C);
+    }
+
+    /// Perform an INC instruction incrementing by e
     fn increment8(&mut self,
                     op: Z80InstructionLocation,
-                    e: i8) {
+                    e: u8) {
         // INC r    p.165
         // ...
         // DEC r    p.170
@@ -526,17 +539,8 @@ impl Z80 {
         };
 
         // increment register
-        let mut temp = temp as i16;
-        temp += e as i16;
+        let temp = Z80::add8_with_carry(temp, e, &mut self.registers.flags);
         
-        // check for overflow
-        self.registers.flags.set(ZSF::PV, temp < 0 || temp > 255);
-        let temp = temp as u8;
-        // set zero flag
-        self.registers.flags.set(ZSF::Z, temp == 0);
-        // set sign flag
-        self.registers.flags.set(ZSF::S, (temp as i8) < 0);
-
         match(op) {
             ZIL::RegisterA => { self.registers.a = temp }
             ZIL::RegisterB => { self.registers.b = temp }
@@ -640,6 +644,9 @@ impl Z80 {
  
         let mut carry_out = false;
 
+        // half carry is carry from bit 3 to bit 4
+        let half_carry_out = ((a & 0x0f) + (b & 0x0f)) & 0x10 != 0;
+
         let acc =
             if flags.contains(ZSF::C) {
                 // with carry
@@ -662,6 +669,7 @@ impl Z80 {
 
         // update flags
         flags.set(ZSF::C, carry_out);
+        flags.set(ZSF::H, half_carry_out);
         flags.set(ZSF::PV, carry_ins);
 
         flags.set(ZSF::S, acc & 0x80 != 0);
@@ -957,7 +965,26 @@ impl Z80 {
                 // perform subtraction
                 self.registers.a =
                     Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
+                // toggle carries
+                self.registers.flags.toggle(ZSF::C);
+
+                self.registers.flags.set(ZSF::N, true);
+            },
+
+            ZI::SubCarry(opv) => {
+                // SBC s    p.150
+                
+                // unpack value to compare from operand
+                let value = self.read_AND_operand(opv);
+
+                // SUB can be performed with ADD:
+                // a - b - c = a + ~b + 1 - c = a + ~b + !c
                 // toggle carry
+                self.registers.flags.toggle(ZSF::C);
+                // perform subtraction
+                self.registers.a =
+                    Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
+                // toggle carries
                 self.registers.flags.toggle(ZSF::C);
 
                 self.registers.flags.set(ZSF::N, true);
@@ -1041,6 +1068,62 @@ impl Z80 {
 
             },
 
+            ZI::Add16Carry(oplhs, oprhs) => {
+                // ADC HL, ss   p.180
+
+                // unpack rhs operand
+                let rhs = match oprhs {
+                    ZIL::RegisterBC => { self.registers.BC() }
+                    ZIL::RegisterDE => { self.registers.DE() }
+                    ZIL::RegisterHL => { self.registers.HL() }
+                    ZIL::RegisterSP => { self.registers.sp }
+                  _ => { panic!("unhandled operand: {}", oprhs.to_string()) }
+                };
+
+                // unpack lhs operand
+                let lhs = match oplhs {
+                    ZIL::RegisterHL => { self.registers.HL() }
+                  _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
+                };
+                
+                // use an i32 temporary accumulator
+                let mut temp :i32 = lhs as i16 as i32;
+                // perform addition
+                temp += rhs as i16 as i32;
+                // add carry if needed
+                if self.registers.flags.contains(ZSF::C) {
+                    temp += 1
+                }
+
+                // assign result as u16 
+                let utemp = temp as u16;
+                // assign value to lhs operand
+                let lhs = match oplhs {
+                    ZIL::RegisterHL => { self.registers.set_HL(utemp) }
+                    ZIL::RegisterIX => { self.registers.ix = utemp }
+                    ZIL::RegisterIY => { self.registers.iy = utemp }
+                  _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
+                };
+
+                // update status flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, false);
+                // sign
+                self.registers.flags.set(ZSF::S, temp < 0);
+                // zero
+                self.registers.flags.set(ZSF::Z, temp == 0);
+                // overflow
+                self.registers.flags.set(ZSF::PV, (temp < std::i16::MIN as i32) || (temp > std::i16::MAX as i32));
+                // carry
+                self.registers.flags.set(ZSF::C, temp > std::i16::MAX as i32);
+                // half-carry
+                self.registers.flags.set(ZSF::H, false);
+
+
+            },
+
+
+
             ZI::Sub16Carry(oplhs, oprhs) => {
                 // SBC HL, ss   p.192
                 
@@ -1116,6 +1199,43 @@ impl Z80 {
                 self.registers.flags.insert(ZSF::C);
             },
 
+            ZI::DecimalAdujstAccumulator => {
+                // DAA      p.167
+                //
+                // adjust accumulator for BCD addition and substratction operation
+                
+                // (from http://z80-heaven.wikidot.com/instructions-set:daa)
+                // When this instruction is executed, the A register is BCD 
+                // corrected using the contents of the flags. The exact 
+                // process is the following: if the least significant four bits
+                // of A contain a non-BCD digit (i. e. it is greater than 9)
+                // or the H flag is set, then $06 is added to the register.
+                // Then the four most significant bits are checked.
+                // If this more significant digit also happens to be 
+                // greater than 9 or the C flag is set, then $60 is added.
+
+                let a = &mut self.registers.a;
+
+                // least significant bits (0-3)
+                if ((*a & 0x0f) > 9) || self.registers.flags.contains(ZSF::H) {
+                    *a += 0x06;
+                }
+
+                // most significant bits (7-4)
+                if((*a & 0xf0) > 0x90) || self.registers.flags.contains(ZSF::C) {
+                    *a += 0x60;
+
+                    // If the second addition was needed, the C flag is set after execution,
+                    // otherwise it is reset. 
+                    self.registers.flags.set(ZSF::C, true);
+                }
+                
+                // The N flag is preserved, P/V is parity and the others are altered by definition.
+                self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(*a));
+                self.registers.flags.set(ZSF::Z, *a == 0);
+                self.registers.flags.set(ZSF::S, *a & 0x80 != 0);
+            },
+
             ZI::NegateAccumulator => {
                 // NEG      p.176
             
@@ -1145,9 +1265,17 @@ impl Z80 {
             ZI::Increment(op) => {
                 // INC r    p.165
                 // ...
+
+                // preserve carry flag
+                let carry = self.registers.flags.contains(ZSF::C);
+
+                self.registers.flags.set(ZSF::C, false);
                 self.increment8(op, 1);
+
                 // add/sub 
                 self.registers.flags.set(ZSF::N, false);
+                // recover carry flag
+                self.registers.flags.set(ZSF::C, carry);
             },
 
             ZI::Increment16(op) => {
@@ -1161,7 +1289,17 @@ impl Z80 {
             ZI::Decrement(op) => {
                 // DEC r    p.170
                 // ...
-                self.increment8(op, -1);
+                
+                // preserve carry flag
+                let carry = self.registers.flags.contains(ZSF::C);
+
+                self.registers.flags.set(ZSF::C, false);
+                self.decrement8(op, 1);
+
+                // add/sub 
+                self.registers.flags.set(ZSF::N, false);
+                // recover carry flag
+                self.registers.flags.set(ZSF::C, carry);
             },
 
             ZI::Decrement16(op) => {

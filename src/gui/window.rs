@@ -46,13 +46,37 @@ impl EmulatorWindow {
 
 }
 
+use crate::system::JoystickButton as Button;
+
 impl event::EventHandler for EmulatorWindow {
+
+    fn key_up_event(&mut self, _ctx: &mut Context, kc: KeyCode, km: KeyMods) {
+        match kc {
+            KeyCode::Up => self.gg.set_button_state(Button::Up, false),
+            KeyCode::Down => self.gg.set_button_state(Button::Down, false),
+            KeyCode::Left => self.gg.set_button_state(Button::Left, false),
+            KeyCode::Right => self.gg.set_button_state(Button::Right, false),
+            KeyCode::Y => self.gg.set_button_state(Button::Start, false),
+            KeyCode::U => self.gg.set_button_state(Button::A, false),
+            KeyCode::J => self.gg.set_button_state(Button::B, false),
+            _ => {},
+        }
+    }
 
     fn key_down_event(&mut self, _ctx: &mut Context, kc: KeyCode, km: KeyMods, repeat:bool) {
         match kc {
+            KeyCode::Up => self.gg.set_button_state(Button::Up, true),
+            KeyCode::Down => self.gg.set_button_state(Button::Down, true),
+            KeyCode::Left => self.gg.set_button_state(Button::Left, true),
+            KeyCode::Right => self.gg.set_button_state(Button::Right, true),
+            KeyCode::Y => self.gg.set_button_state(Button::Start, true),
+            KeyCode::U => self.gg.set_button_state(Button::A, true),
+            KeyCode::J => self.gg.set_button_state(Button::B, true),
+
             KeyCode::Space => { self.running = !self.running },
             KeyCode::S => { self.run_one = true },
-            _ => {}
+            KeyCode::R => { self.gg.reset() },
+            _ => {},
         }
     }
 

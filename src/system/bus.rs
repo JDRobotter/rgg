@@ -3,6 +3,7 @@ use crate::memory::Rom;
 use crate::memory::Ram;
 use crate::system::VDP;
 use crate::cpu::Z80;
+use crate::system::Joystick;
 
 use std::rc::Rc;
 use std::cell::{RefCell,RefMut};
@@ -68,6 +69,7 @@ pub struct SystemBus {
     bank2_mapper: RomMapper,
 
     pub vdp: VDP,
+    pub joystick: Joystick,
 }
 
 impl SystemBus {
@@ -83,6 +85,8 @@ impl SystemBus {
             bank2_mapper: RomMapper::new(0x02),
 
             vdp: VDP::new(),
+
+            joystick: Joystick::new(),
         }
     }
 
@@ -96,16 +100,18 @@ impl SystemBus {
                 // - START/PAUSE OFF
                 // - overseas mode
                 // - NTSC mode
-                (IOPort00::NJAP).bits
+                self.joystick.register_00() |  (IOPort00::NJAP).bits
             },
             // IO port 5
             // serial communication mode setting
             0x05 => {
+                // not implemented
                 0
             },
             // memory control
             0x3E => {
-                panic!("not implemented")
+                // not implemented
+                0
             },
             // IO port control
             0x3F => {
@@ -129,14 +135,15 @@ impl SystemBus {
             },
             // IO port A/B
             0xDC | 0xC0 => {
-                0
+                self.joystick.register_dc()
             },
             // IO port B/misc
             0xDD | 0xC1 => {
-                0
+                self.joystick.register_dd()
             },
             _ => { 
-                panic!("IO read from unknown address: {:02x}", addr);
+                println!("IO read from unknown address: {:02x}", addr);
+                0
             },
         }
     }
@@ -166,7 +173,7 @@ impl SystemBus {
             },
             // memory control
             0x3E => {
-                panic!("not implemented")
+                // not implemented
             },
             // IO port control
             0x3F => {
@@ -197,7 +204,7 @@ impl SystemBus {
             0xDD | 0xC1 => {
             },
             _ => {
-                panic!("IO write to unknown address: {:02x}", addr)
+                println!("IO write to unknown address: {:02x}", addr)
             }
         }
     }
