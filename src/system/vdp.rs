@@ -676,7 +676,13 @@ impl VDP {
         // clear cw flag
         self.cw_second_byte = false;
 
-        self.dp_read_buffer
+        let rbyte = self.dp_read_buffer;
+
+        // auto increment and update read buffer
+        self.increment_address_register();
+        self.dp_read_buffer = self.vram[self.dp_address_register as usize];
+        
+        rbyte
     }
 
     pub fn write_data_port(&mut self, byte: u8) {
@@ -687,7 +693,7 @@ impl VDP {
         match self.data_port_mux {
             VDPDataPortMux::VRAM => {
 
-                println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
+                //println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
 
                 self.vram[self.dp_address_register as usize] = byte;
             },
