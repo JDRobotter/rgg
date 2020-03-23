@@ -591,14 +591,9 @@ impl Z80 {
         // increment register
         let mut temp = temp as i32;
         temp += e as i32;
-        
-        // check for overflow
-        self.registers.flags.set(ZSF::PV, temp < 0 || temp > 65535);
         let temp = temp as u16;
-        // set zero flag
-        self.registers.flags.set(ZSF::Z, temp == 0);
-        // set sign flag
-        self.registers.flags.set(ZSF::S, (temp as i16) < 0);
+
+        // no flags altered for 16 bits INC/DEC
 
         match(op) {
             ZIL::RegisterBC => {
@@ -635,6 +630,49 @@ impl Z80 {
             ZJC::SignNegative   => {  self.registers.flags.contains(ZSF::S) },
             ZJC::SignPositive   => { !self.registers.flags.contains(ZSF::S) },
         }
+    }
+
+    fn add16_with_carry(a: u16, b:u16, flags: &mut Z80StatusFlags) -> u16 {
+
+        // based on
+        // https://stackoverflow.com/questions/8034566/overflow-and-carry-flags-on-z80
+ 
+        let mut carry_out = false;
+
+        // 1111 11
+        // 5432 1098 7654 3210
+        // half carry is carry from bit 11 to bit 12
+        let half_carry_out = ((a & 0x0fff) + (b & 0x0fff)) & 0x1000 != 0;
+
+        let acc =
+            if flags.contains(ZSF::C) {
+                // with carry
+                carry_out = (a >= 0xffff - b);
+                a + b + 1
+            }
+            else {
+                // without carry
+                carry_out = (a > 0xffff - b);
+                a + b
+        };
+    
+        // compute overflow by sign comparison
+        let mut carry_ins = ((a ^ b) ^ 0x8000) & 0x8000 != 0;
+        if carry_ins {
+            // if addend signs are the same
+            // overflow if the sum sign differs from the sign of either addends
+            carry_ins = ((acc ^ a) & 0x8000) != 0;
+        }
+
+        // update flags
+        flags.set(ZSF::C, carry_out);
+        flags.set(ZSF::H, half_carry_out);
+        flags.set(ZSF::PV, carry_ins);
+
+        flags.set(ZSF::S, acc & 0x8000 != 0);
+        flags.set(ZSF::Z, acc == 0);
+
+        acc
     }
 
     fn add8_with_carry(a: u8, b:u8, flags: &mut Z80StatusFlags) -> u8 {
@@ -967,6 +1005,7 @@ impl Z80 {
                     Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
                 // toggle carries
                 self.registers.flags.toggle(ZSF::C);
+                self.registers.flags.toggle(ZSF::H);
 
                 self.registers.flags.set(ZSF::N, true);
             },
@@ -1036,36 +1075,21 @@ impl Z80 {
                   _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
                 };
                 
-                // use an i32 temporary accumulator
-                let mut temp :i32 = lhs as i16 as i32;
-                // perform addition
-                temp += rhs as i16 as i32;
+                // clear CARRY flag
+                self.registers.flags.set(ZSF::C, false);
+                let temp = Z80::add16_with_carry(lhs, rhs, &mut self.registers.flags);
 
-                // assign result as u16 
-                let utemp = temp as u16;
                 // assign value to lhs operand
                 let lhs = match oplhs {
-                    ZIL::RegisterHL => { self.registers.set_HL(utemp) }
-                    ZIL::RegisterIX => { self.registers.ix = utemp }
-                    ZIL::RegisterIY => { self.registers.iy = utemp }
+                    ZIL::RegisterHL => { self.registers.set_HL(temp) }
+                    ZIL::RegisterIX => { self.registers.ix = temp }
+                    ZIL::RegisterIY => { self.registers.iy = temp }
                   _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
                 };
 
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, false);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < std::i16::MIN as i32) || (temp > std::i16::MAX as i32));
-                // carry
-                self.registers.flags.set(ZSF::C, temp > std::i16::MAX as i32);
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
-
-
             },
 
             ZI::Add16Carry(oplhs, oprhs) => {
@@ -1086,43 +1110,20 @@ impl Z80 {
                   _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
                 };
                 
-                // use an i32 temporary accumulator
-                let mut temp :i32 = lhs as i16 as i32;
-                // perform addition
-                temp += rhs as i16 as i32;
-                // add carry if needed
-                if self.registers.flags.contains(ZSF::C) {
-                    temp += 1
-                }
+                let temp = Z80::add16_with_carry(lhs, rhs, &mut self.registers.flags);
 
-                // assign result as u16 
-                let utemp = temp as u16;
                 // assign value to lhs operand
                 let lhs = match oplhs {
-                    ZIL::RegisterHL => { self.registers.set_HL(utemp) }
-                    ZIL::RegisterIX => { self.registers.ix = utemp }
-                    ZIL::RegisterIY => { self.registers.iy = utemp }
+                    ZIL::RegisterHL => { self.registers.set_HL(temp) }
+                    ZIL::RegisterIX => { self.registers.ix = temp }
+                    ZIL::RegisterIY => { self.registers.iy = temp }
                   _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
                 };
 
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, false);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < std::i16::MIN as i32) || (temp > std::i16::MAX as i32));
-                // carry
-                self.registers.flags.set(ZSF::C, temp > std::i16::MAX as i32);
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
-
-
             },
-
-
 
             ZI::Sub16Carry(oplhs, oprhs) => {
                 // SBC HL, ss   p.192
@@ -1140,33 +1141,17 @@ impl Z80 {
 
                 let lhs = self.registers.HL();
                 
-                // use an i32 temporary accumulator
-                let mut temp :i32 = lhs as i16 as i32;
-                // perform substraction
-                temp -= rhs as i16 as i32;
-                // if carry flag is set remove one
-                if self.registers.flags.contains(ZSF::C) {
-                    temp -= 1;
-                }
+                self.registers.flags.toggle(ZSF::C);
+                let temp = Z80::add16_with_carry(lhs, !rhs, &mut self.registers.flags);
+                self.registers.flags.toggle(ZSF::C);
+                self.registers.flags.toggle(ZSF::H);
 
                 // assign result as u16 
-                self.registers.set_HL(temp as u16);
+                self.registers.set_HL(temp);
 
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, true);
-                // sign
-                self.registers.flags.set(ZSF::S, temp < 0);
-                // zero
-                self.registers.flags.set(ZSF::Z, temp == 0);
-                // overflow
-                self.registers.flags.set(ZSF::PV, (temp < (std::i16::MIN as i32)) || ((std::i16::MAX as i32) < temp));
-                // carry
-                self.registers.flags.set(ZSF::C, temp < (std::i16::MIN as i32));
-                // half-carry
-                self.registers.flags.set(ZSF::H, false);
-
-
             },
             
             ZI::ComplementAccumulator => {

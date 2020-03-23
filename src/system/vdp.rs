@@ -244,6 +244,9 @@ pub struct VDP {
     // screen buffer (RGBA pixels)
     screen: [Color; 256*224],
 
+    // tiles number matrix (debug)
+    debug_tiles_matrix: [u16; 28*32],
+
     // current scanline
     scanline: u16,
 }
@@ -271,6 +274,8 @@ impl VDP {
 
             screen: [Color::black(); 256*224],
     
+            debug_tiles_matrix: [0; 28*32],
+
             scanline: 0,
         }
     }
@@ -382,10 +387,22 @@ impl VDP {
     }
 
     fn blit_to_screen(&mut self, bx:usize, by:usize, p:Pattern) {
+        self.blit_to_screen_ex(bx,by,p,false,false)
+    }
+
+    fn blit_to_screen_ex(&mut self,
+                            bx:usize, by:usize,
+                            p:Pattern,
+                            reverse_horizontal:bool,
+                            reverse_vertical:bool) {
         for dy in 0..8 {
             let y = by + dy;
             for dx in 0..8 {
-                let color = p.get(dx,dy);
+                
+                let cdx = if reverse_horizontal { 7 - dx } else { dx };
+                let cdy = if reverse_vertical   { 7 - dy } else { dy };
+                let color = p.get(cdx,cdy);
+
                 // skip is color is transparent
                 if color.alpha() {
                     let x = bx + dx;
@@ -395,6 +412,10 @@ impl VDP {
                 }
             }
         }
+    }
+
+    pub fn debug_get_tile_number(&self, x:usize, y:usize) -> u16 {
+        self.debug_tiles_matrix[x + 32*y]
     }
 
     pub fn render(&mut self) {
@@ -408,7 +429,10 @@ impl VDP {
                 // read background tile information from table
                 let word = self.read_vram_u16(p);
                 let bg = BgTile::from(word);
-                
+            
+                // update debug tile matrix
+                self.debug_tiles_matrix[32*y + x] = bg.pattern;
+
                 // fetch 8x8 pixel pattern from pattern generator
                 let pattern = self.get_tile_pattern(
                                     bg.pattern,
@@ -418,7 +442,9 @@ impl VDP {
                 // blit patterns to screen
                 let px:usize = x*8;
                 let py:usize = y*8; 
-                self.blit_to_screen(px,py,pattern);
+                self.blit_to_screen_ex(px,py,pattern,
+                                        bg.horizontal_flip,
+                                        bg.vertical_flip);
 
                 p += 2;
             }
@@ -661,7 +687,7 @@ impl VDP {
         match self.data_port_mux {
             VDPDataPortMux::VRAM => {
 
-                //println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
+                println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
 
                 self.vram[self.dp_address_register as usize] = byte;
             },

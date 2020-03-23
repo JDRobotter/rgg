@@ -1,7 +1,7 @@
 use cgmath;
 
 use ggez;
-use ggez::graphics::{self, DrawParam};
+use ggez::graphics::{self, DrawParam, Scale, Color};
 use ggez::{event, Context, GameResult};
 use ggez::event::{KeyCode, KeyMods};
 use ggez::input::keyboard;
@@ -136,6 +136,22 @@ impl event::EventHandler for EmulatorWindow {
             graphics::DrawParam::new()
                 .dest(cgmath::Point2::new(21.0, 21.0))
                 .scale(cgmath::Vector2::new(2.0, 2.0)))?;
+
+        // -- draw VDP tiles pattern numbers overlay --
+        for y in 0..28 {
+            for x in 0..32 {
+                
+                let idx = self.gg.cpu.bus.vdp.debug_get_tile_number(x,y);
+                let mut text = graphics::Text::new(
+                    graphics::TextFragment::new(format!("{:0x}",idx))
+                        .font(self.font)
+                        .color(Color::new(255.0,0.0,255.0,100.0))
+                );
+                let xy = cgmath::Point2::new(21.0 + 2.0*(x as f32)*8.0,
+                                                21.0 + 2.0*(y as f32)*8.0);
+                graphics::draw(ctx, &text, (xy,))?;
+            }
+        }
 
         // -- draw GG instructions --
         for (idx,line) in self.gg.instructions.iter().rev().enumerate() {
