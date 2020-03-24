@@ -9,6 +9,7 @@ pub enum Z80InstructionLocation {
     RegisterE,
     RegisterH,
     RegisterL,
+    RegisterR,
 
     RegisterIndirectA,
     RegisterIndirectB,
@@ -55,6 +56,7 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterE =>          format!("E"),
             Z80InstructionLocation::RegisterH =>          format!("H"),
             Z80InstructionLocation::RegisterL =>          format!("L"),
+            Z80InstructionLocation::RegisterR =>          format!("R"),
             Z80InstructionLocation::RegisterIndirectA =>  format!("(A)"),
             Z80InstructionLocation::RegisterIndirectB =>  format!("(B)"),
             Z80InstructionLocation::RegisterIndirectC =>  format!("(C)"),
@@ -742,6 +744,11 @@ impl Z80InstructionDecoder {
             Some(ZI::Load(ZIL::IndexedIY(self.matched_value(0)), ZIL::Immediate(self.matched_value(1))))
         }
 
+        // register R
+        else if self.match_bytes(&[0xED,0x5F]) { Some(ZI::Load(ZIL::RegisterA, ZIL::RegisterR)) }
+        else if self.match_bytes(&[0xED,0x4F]) { Some(ZI::Load(ZIL::RegisterR, ZIL::RegisterE)) }
+
+        // OUT
         else if self.match_bytes(&[0xED,0x79]) { Some(ZI::Out(ZIL::RegisterIndirectA, ZIL::RegisterA)) }
         else if self.match_bytes(&[0xED,0x41]) { Some(ZI::Out(ZIL::RegisterIndirectB, ZIL::RegisterA)) }
         else if self.match_bytes(&[0xED,0x49]) { Some(ZI::Out(ZIL::RegisterIndirectC, ZIL::RegisterA)) }

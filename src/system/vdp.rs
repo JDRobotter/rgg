@@ -488,7 +488,7 @@ impl VDP {
                     // from Sega GG HW ref. man. (rev1) p.32
                     
                     // compute masked pattern number
-                    let mn = sp.n & 0x7f;
+                    let mn = sp.n & 0xfe;
                     // fetch pattern A and pattern B
                     let pa = self.get_sprite_pattern(mn | 0x00);
                     let pb = self.get_sprite_pattern(mn | 0x01);

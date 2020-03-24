@@ -149,7 +149,7 @@ impl event::EventHandler for EmulatorWindow {
                 );
                 let xy = cgmath::Point2::new(21.0 + 2.0*(x as f32)*8.0,
                                                 21.0 + 2.0*(y as f32)*8.0);
-                graphics::draw(ctx, &text, (xy,))?;
+                //graphics::draw(ctx, &text, (xy,))?;
             }
         }
 
@@ -200,6 +200,8 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw GG pattern table --
         //
+        let bx = sw + 40.0;
+        let by = 350.0;
         for py in 0..16 {
             for px in 0..16 {
                 
@@ -222,8 +224,7 @@ impl event::EventHandler for EmulatorWindow {
                 }
 
                 // draw image
-                let bx = sw + 40.0;
-                let by = 350.0;
+
                 let im = graphics::Image::from_rgba8(ctx, 8, 8, &rgba)?;
                 graphics::draw(ctx, &im,
                     graphics::DrawParam::new()
@@ -232,10 +233,21 @@ impl event::EventHandler for EmulatorWindow {
 
             }
         }
+        let w = 16.0;
+        let h = 16.0;
+        let r = graphics::Rect::new(bx, by, 8.0*w, 8.0*h);
+        let rlcd = graphics::Mesh::new_rectangle(ctx,
+                                    graphics::DrawMode::stroke(1.0),
+                                    r,
+                                    graphics::WHITE)?;
+        graphics::draw(ctx, &rlcd, DrawParam::default())?;
+
 
         // -- draw GG sprite table --
         //
-        for py in 0..16 {
+        let bx = sw + 40.0 + 16.0*8.0 + 10.0;
+        let by = 350.0;
+        for py in 0..12 {
             for px in 0..16 {
                 
                 // pattern index
@@ -257,8 +269,6 @@ impl event::EventHandler for EmulatorWindow {
                 }
 
                 // draw image
-                let bx = sw + 40.0 + 16.0*8.0 + 40.0;
-                let by = 350.0;
                 let im = graphics::Image::from_rgba8(ctx, 8, 8, &rgba)?;
                 graphics::draw(ctx, &im,
                     graphics::DrawParam::new()
@@ -267,7 +277,14 @@ impl event::EventHandler for EmulatorWindow {
 
             }
         }
-
+        let w = 16.0;
+        let h = 12.0;
+        let r = graphics::Rect::new(bx, by, 8.0*w, 8.0*h);
+        let rlcd = graphics::Mesh::new_rectangle(ctx,
+                                    graphics::DrawMode::stroke(1.0),
+                                    r,
+                                    graphics::WHITE)?;
+        graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
         graphics::present(ctx)
     }

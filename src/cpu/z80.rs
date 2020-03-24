@@ -428,6 +428,10 @@ impl Z80 {
             ZIL::RegisterE => { self.registers.e },
             ZIL::RegisterH => { self.registers.h },
             ZIL::RegisterL => { self.registers.l },
+            ZIL::RegisterR => {
+                println!("register R not implemented");
+                0
+            },
             ZIL::RegisterIndirectBC => {
                 // fetch byte on bus at address pointed by register BC
                 self.bus.cpu_read(self.registers.BC())
@@ -1669,6 +1673,9 @@ impl Z80 {
                     ZIL::RegisterE => { self.registers.e = value},
                     ZIL::RegisterH => { self.registers.h = value},
                     ZIL::RegisterL => { self.registers.l = value},
+                    ZIL::RegisterR => {
+                        println!("register R not implemented");
+                    },
                     ZIL::RegisterIndirectHL => {
                         // write byte at address pointed by register HL
                         self.bus.cpu_write(self.registers.HL(), value)
