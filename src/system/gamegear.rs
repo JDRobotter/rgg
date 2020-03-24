@@ -29,7 +29,15 @@ impl GameGear {
 
         let mut cpu = Z80::new(rom);
 
-        //cpu.set_breakpoint(0x09);
+/*
+        cpu.set_breakpoint(0x2b89);
+        cpu.set_breakpoint(0x2b07);
+        cpu.set_breakpoint(0x2af7);
+        cpu.set_breakpoint(0x2ae8);
+        cpu.set_breakpoint(0x2a9e);
+        cpu.set_breakpoint(0x1981);
+*/
+        cpu.set_breakpoint(0x2ad4);
         //cpu.set_breakpoint(0x27e);
         //cpu.set_breakpoint(0x2b03);
 
@@ -59,8 +67,11 @@ impl GameGear {
         // Z80 runs at 3.579545 MHz
         // Z80 can run approx 266 clocks cycles per scanline
 
-        let will_break = self.cpu.step();
+        let mut will_break = self.cpu.step();
         self.steps += 1;
+
+        // VDP may trigger a breakpoint
+        will_break |= self.cpu.bus.vdp.will_break();
 
         // push last decoded instruction to debug
         let ass = self.cpu.dissassembly_debug_string();

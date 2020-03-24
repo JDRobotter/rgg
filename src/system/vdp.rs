@@ -249,6 +249,9 @@ pub struct VDP {
 
     // current scanline
     scanline: u16,
+
+    // debug breakpoint latch
+    will_break: bool,
 }
 
 impl VDP {
@@ -277,6 +280,18 @@ impl VDP {
             debug_tiles_matrix: [0; 28*32],
 
             scanline: 0,
+
+            will_break: false,
+        }
+    }
+
+    pub fn will_break(&mut self) -> bool {
+        if self.will_break {
+            self.will_break = false;
+            true
+        }
+        else {
+            false
         }
     }
 
@@ -695,7 +710,15 @@ impl VDP {
 
                 //println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
 
-                self.vram[self.dp_address_register as usize] = byte;
+                let addr = self.dp_address_register as usize;
+                // DEBUG
+                if addr == 0x3f0c {
+                    println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
+                    self.will_break = true;
+                }
+                // DEBUG
+
+                self.vram[addr] = byte;
             },
 
             VDPDataPortMux::CRAM => {

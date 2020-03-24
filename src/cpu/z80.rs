@@ -1051,6 +1051,7 @@ impl Z80 {
                 Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
                 // toggle carry
                 self.registers.flags.toggle(ZSF::C);
+                self.registers.flags.toggle(ZSF::H);
 
                 self.registers.flags.set(ZSF::N, true);
             },
@@ -1079,6 +1080,11 @@ impl Z80 {
                   _ => { panic!("unhandled operand: {}", oplhs.to_string()) }
                 };
                 
+                // S, Z and P/V flags are preserved by ADD
+                let flag_s = self.registers.flags.contains(ZSF::S);
+                let flag_z = self.registers.flags.contains(ZSF::Z);
+                let flag_pv = self.registers.flags.contains(ZSF::PV);
+
                 // clear CARRY flag
                 self.registers.flags.set(ZSF::C, false);
                 let temp = Z80::add16_with_carry(lhs, rhs, &mut self.registers.flags);
@@ -1094,6 +1100,11 @@ impl Z80 {
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, false);
+
+                // restore flags
+                self.registers.flags.set(ZSF::S, flag_s);
+                self.registers.flags.set(ZSF::Z, flag_z);
+                self.registers.flags.set(ZSF::PV, flag_pv);
             },
 
             ZI::Add16Carry(oplhs, oprhs) => {
@@ -1318,7 +1329,7 @@ impl Z80 {
                 // carry
                 self.registers.flags.set(ZSF::C, false);
                 // half-carry
-                self.registers.flags.set(ZSF::H, false);
+                self.registers.flags.set(ZSF::H, true);
             },
 
             ZI::Or(opv) => {
