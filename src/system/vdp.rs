@@ -438,6 +438,10 @@ impl VDP {
         // initialize pointer with name table base address
         let mut p: u16 = self.name_table_base_address();
         
+        // fetch scroll registers 
+        let hscroll = self.registers[8] as i8;
+        let vscroll = self.registers[9] as i8;
+
         // -- render tiles --
         for y in 0..28 {
             for x in 0..32 {
@@ -455,8 +459,8 @@ impl VDP {
                 );
              
                 // blit patterns to screen
-                let px:usize = x*8;
-                let py:usize = y*8; 
+                let px:usize = (hscroll as usize + x*8) % 256;
+                let py:usize = -vscroll as usize + y*8; 
                 self.blit_to_screen_ex(px,py,pattern,
                                         bg.horizontal_flip,
                                         bg.vertical_flip);
@@ -714,7 +718,7 @@ impl VDP {
                 // DEBUG
                 if addr == 0x3f0c {
                     println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
-                    self.will_break = true;
+                    //self.will_break = true;
                 }
                 // DEBUG
 
