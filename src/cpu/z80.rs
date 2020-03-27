@@ -985,8 +985,6 @@ impl Z80 {
                 // unpack value to compare from operand
                 let value = self.read_AND_operand(opv);
 
-                // ignore carry
-                self.registers.flags.remove(ZSF::C);
                 // perform addition
                 self.registers.a =
                     Z80::add8_with_carry(self.registers.a, value, &mut self.registers.flags);
@@ -1029,6 +1027,7 @@ impl Z80 {
                     Z80::add8_with_carry(self.registers.a, !value, &mut self.registers.flags);
                 // toggle carries
                 self.registers.flags.toggle(ZSF::C);
+                self.registers.flags.toggle(ZSF::H);
 
                 self.registers.flags.set(ZSF::N, true);
             },

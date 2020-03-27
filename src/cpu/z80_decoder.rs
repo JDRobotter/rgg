@@ -239,7 +239,7 @@ impl Z80Instruction {
             Z80Instruction::AddCarry(src)   => format!("adc {}", src.to_string()),
             Z80Instruction::Add16Carry(dst, src) => format!("add {} {}", dst.to_string(), src.to_string()),
             Z80Instruction::Sub(src)        => format!("sub {}", src.to_string()),
-            Z80Instruction::Sub16Carry(dst, src) => format!("sub {} {}", dst.to_string(), src.to_string()),
+            Z80Instruction::Sub16Carry(dst, src) => format!("sbc {} {}", dst.to_string(), src.to_string()),
             Z80Instruction::SubCarry(src)   => format!("sbc {}", src.to_string()),
             Z80Instruction::Xor(src)        => format!("xor {}", src.to_string()),
             Z80Instruction::Or(src)         => format!("or  {}", src.to_string()),
@@ -1153,10 +1153,10 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xFF) { Some(ZI::Restart(0x38)) }
 
         // Z80 rotate and shift, specialized register A opcodes
-        else if self.match_byte(0x07) { Some(ZI::RotateLeftCarry(ZIL::RegisterA)) }
-        else if self.match_byte(0x0F) { Some(ZI::RotateRightCarry(ZIL::RegisterA)) }
-        else if self.match_byte(0x17) { Some(ZI::RotateLeft(ZIL::RegisterA)) }
-        else if self.match_byte(0x1F) { Some(ZI::RotateRight(ZIL::RegisterA)) }
+        else if self.match_byte(0x07)           { Some(ZI::RotateLeftCarry(ZIL::RegisterA)) }
+        else if self.match_byte(0x0F)           { Some(ZI::RotateRightCarry(ZIL::RegisterA)) }
+        else if self.match_byte(0x17)           { Some(ZI::RotateLeft(ZIL::RegisterA)) }
+        else if self.match_byte(0x1F)           { Some(ZI::RotateRight(ZIL::RegisterA)) }
 
         // Z80 manual table 14, bit operations
         else if self.match_special(&[ZIB::Byte(0xCB), ZIB::Placeholder]) {

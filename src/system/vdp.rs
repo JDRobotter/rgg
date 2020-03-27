@@ -481,6 +481,7 @@ impl VDP {
             let sx = sp.x as usize;
             let sy = sp.y as usize;
             match sx {
+                /*
                 0xd0 => {
                     // at a vertical pos., 0xd0 has the meaning of an end code
                     break;
@@ -489,6 +490,7 @@ impl VDP {
                     // at a vertical pos., 0xe0 prevent a sprite from being displayed
                     continue;
                 },
+                */
                 _ => {
                     // nothing to do
                 }
@@ -715,13 +717,6 @@ impl VDP {
                 //println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
 
                 let addr = self.dp_address_register as usize;
-                // DEBUG
-                if addr == 0x3f0c {
-                    println!("VDP VRAM W @{:04x} {:02x}", self.dp_address_register, byte);
-                    //self.will_break = true;
-                }
-                // DEBUG
-
                 self.vram[addr] = byte;
             },
 

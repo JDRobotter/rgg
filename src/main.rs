@@ -25,9 +25,11 @@ fn main() -> GameResult {
 
     println!("[+] Starting RGG");
 
+    //let rom = memory::Rom::open("test/test.gg")?;
     let rom = memory::Rom::open("roms/Sonic The Hedgehog (World) (Rev 1).gg")?;
     //let rom = memory::Rom::open("roms/Columns (USA, Europe).gg")?;
-    //let rom = memory::Rom::open("roms/junction.gg")?;
+    //let rom = memory::Rom::open("roms/Asterix and the Great Rescue (Europe) (En,Fr,De,Es,It).gg")?;
+    //let rom = memory::Rom::open("roms/Fantasy Zone (Japan, Europe).gg")?;
     //let rom = memory::Rom::open("roms/senna.gg")?;
 
     println!("[+] loaded ROM is {} bytes", rom.size());

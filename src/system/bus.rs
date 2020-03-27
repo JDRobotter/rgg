@@ -248,7 +248,7 @@ impl SystemBus {
         //  $0000-$BFFF : Cartridge ROM (48k)
         //  $C000-$FFFF : Work RAM (8K, mirrored at $E000-$FFFF)
         if addr <= 0xbfff {
-            panic!("no writing to ROM ! (@{:04x})", addr)
+            println!("no writing to ROM ! (@{:04x})", addr)
         }
         else if addr <= 0xdfff {
             // work RAM

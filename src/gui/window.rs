@@ -9,6 +9,11 @@ use ggez::timer;
 
 use crate::system::GameGear;
 
+struct RamWatcher {
+    addr: u16,
+    name: String,
+}
+
 pub struct EmulatorWindow {
 
     gg: GameGear,
@@ -17,6 +22,8 @@ pub struct EmulatorWindow {
 
     running: bool,
     run_one: bool,
+
+    ram_watchers: Vec<RamWatcher>,
 }
 
 impl EmulatorWindow {
@@ -26,11 +33,20 @@ impl EmulatorWindow {
 
         let font = graphics::Font::new(ctx, "/DejaVuSansMono.ttf")?;
 
+        let watchers = vec![
+            RamWatcher { addr: 0xd3fe, name: "sonic X".to_string() },
+            RamWatcher { addr: 0xd401, name: "sonic Y".to_string() },
+            RamWatcher { addr: 0xd2cf, name: "timer mins".to_string() },
+            RamWatcher { addr: 0xd2d0, name: "timer secs".to_string() },
+            RamWatcher { addr: 0xd2d1, name: "timer secs".to_string() },
+        ];
+
         Ok(EmulatorWindow {
             gg: gg,
             font:font,
             running: false,
             run_one: false,
+            ram_watchers: watchers,
         })
     }
 
@@ -169,6 +185,23 @@ impl event::EventHandler for EmulatorWindow {
         let xy = cgmath::Point2::new(20.0, sh + 40.0);
         graphics::draw(ctx, &text, (xy,))?;
 
+        // -- draw watchers values --
+        for (idx,rw) in self.ram_watchers.iter().enumerate() {
+            
+            let b8 = self.gg.cpu.bus.cpu_read(rw.addr);
+            let b16 = self.gg.cpu.bus.cpu_read_u16(rw.addr);
+            let text = graphics::Text::new((
+                    format!("@{:04x} {:5}: @{:04x} {:6} @{:02x} {:3}",
+                        rw.addr, rw.name,
+                        b16, b16 as i16,
+                        b8, b8 as i8),
+                    self.font,
+                    16.0));
+            let mf = idx as f32;
+            let xy = cgmath::Point2::new(sw + 20.0, sh + 40.0 + mf*18.0);
+            graphics::draw(ctx, &text, (xy,))?;
+        }
+        
         // -- draw GG VDP palettes --
         //
         let bx = sw + 40.0;
@@ -197,6 +230,13 @@ impl event::EventHandler for EmulatorWindow {
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
+        // -- draw joystick/buttons state --
+        let text = graphics::Text::new((
+                self.gg.cpu.bus.joystick.to_string(),
+                self.font,
+                16.0));
+        let xy = cgmath::Point2::new(sw + 220.0, 310.0);
+        graphics::draw(ctx, &text, (xy,))?;
 
         // -- draw GG pattern table --
         //
