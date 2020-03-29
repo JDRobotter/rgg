@@ -40,7 +40,7 @@ bitflags! {
         // D0 - Sprite pixels are doubled in size.
         
         // unused
-        const BLK       = 0b0100_0000;
+        const BLANK       = 0b0100_0000;
         const IE0       = 0b0010_0000;
         const M1        = 0b0001_0000;
         const M3        = 0b0000_1000;
@@ -295,16 +295,24 @@ impl VDP {
         }
     }
 
-    pub fn step(&mut self) -> bool {
+    pub fn scanline(&self) -> u16 {
+        self.scanline
+    }
+
+    pub fn step(&mut self) -> (bool,bool) {
+
+        let mut new_frame = false;
+
         self.scanline += 1;
         if self.scanline > 224 {
             self.scanline = 0;
+            new_frame = true;
         }
 
         // check if VDP will generate an interrupt
-        let mode1 = VDPRegisterModeControl2::from_bits_truncate(self.registers[1]);
+        let mode2 = VDPRegisterModeControl2::from_bits_truncate(self.registers[1]);
 
-        if mode1.contains(VDPRegisterModeControl2::IE0) {
+        if mode2.contains(VDPRegisterModeControl2::IE0) {
             // interrupt enable bit used 
             // at the completion of the effective area
 
@@ -313,12 +321,12 @@ impl VDP {
                 // raise internal IRQ flag
                 self.status_register.insert(VDPStatusRegister::VBLANK);
 
-                return true;
+                return (true, new_frame);
             }
         }
         // lower IRQ
         self.status_register.remove(VDPStatusRegister::VBLANK);
-        return false;
+        return (false, new_frame);
     }
 
     fn read_vram_u8(&self, addr:u16) -> u8 {
@@ -434,6 +442,17 @@ impl VDP {
     }
 
     pub fn render(&mut self) {
+
+        // check if screen is BLANKed
+        let mc2 = VDPRegisterModeControl2::from_bits_truncate(self.registers[1]);
+        if ! mc2.contains(VDPRegisterModeControl2::BLANK) {
+            // paint screen with backdrop color
+            let backdrop = self.get_color_from_palette(0,0);
+            for color in self.screen.iter_mut() {
+                *color = backdrop;
+            }
+            return
+        }
 
         // initialize pointer with name table base address
         let mut p: u16 = self.name_table_base_address();

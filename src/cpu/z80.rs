@@ -197,6 +197,10 @@ impl Z80 {
         self.registers.pc = 0;
     }
 
+    pub fn cycles(&self) -> u64 {
+        self.ncycles
+    }
+
     /// Generate an hardware interrupt on CPU
     pub fn interrupt(&mut self) {
 
@@ -262,13 +266,13 @@ impl Z80 {
                           ins.to_string());
                     */
                     // execute decoded instruction
-                    self.execute_instruction(ins);
+                    let tstates = self.execute_instruction(ins);
                     
                     // store instruction
                     self.last_decoded_instruction = ins;
 
                     // increment cycles counter
-                    self.ncycles += 1;
+                    self.ncycles += tstates as u64;
 
                     break;
                 },
@@ -517,7 +521,7 @@ impl Z80 {
         // DEC r    p.170
         // ...
         
-        let temp = match(op) {
+        let temp = match op {
             ZIL::RegisterA => { self.registers.a },
             ZIL::RegisterB => { self.registers.b },
             ZIL::RegisterC => { self.registers.c },
@@ -545,7 +549,7 @@ impl Z80 {
         // increment register
         let temp = Z80::add8_with_carry(temp, e, &mut self.registers.flags);
         
-        match(op) {
+        match op {
             ZIL::RegisterA => { self.registers.a = temp }
             ZIL::RegisterB => { self.registers.b = temp }
             ZIL::RegisterC => { self.registers.c = temp }
@@ -582,7 +586,7 @@ impl Z80 {
         // DEC ss   p.201
         // ...
 
-        let temp = match(op) {
+        let temp = match op {
             ZIL::RegisterBC => { self.registers.BC() }
             ZIL::RegisterDE => { self.registers.DE() }
             ZIL::RegisterHL => { self.registers.HL() }
@@ -599,7 +603,7 @@ impl Z80 {
 
         // no flags altered for 16 bits INC/DEC
 
-        match(op) {
+        match op {
             ZIL::RegisterBC => {
                 self.registers.set_BC(temp)
             },
@@ -720,33 +724,46 @@ impl Z80 {
         acc
     }
 
+    /** Execute given instruction and return number of T states taken to execute */
     pub fn execute_instruction(&mut self,
-                                ins: Z80Instruction) {
+                                ins: Z80Instruction) -> u8 {
 
         match ins {
             ZI::NOP => {
                 // nothing to do
+
+                4 // T-states
             },
 
             ZI::DisableInt => {
                 // DI p.182
                 self.interrupt_enabled = false;
+
+                4 // T-states
             },
             ZI::EnableInt => {
                 // EI p.183
                 self.interrupt_enabled = true;
+
+                4 // T-states
             },
             ZI::SetINTMode0 => {
                 // IM p.184
                 self.interrupt_mode = 0;
+
+                8 // T-states
             },
             ZI::SetINTMode1 => {
                 // IM p.185
                 self.interrupt_mode = 1;
+
+                8 // T-states
             },
             ZI::SetINTMode2 => {
                 // IM p.186
                 self.interrupt_mode = 2;
+
+                8 // T-states
             },
             
             ZI::JumpImmediate(condition, opaddr) => {
@@ -781,6 +798,14 @@ impl Z80 {
                     self.registers.pc = addr;
 
                 }
+                
+                // T-states
+                match opaddr {
+                    ZIL::RegisterHL => { 4 },
+                    ZIL::RegisterIX => { 8 },
+                    ZIL::RegisterIY => { 8 },
+                    _ => { 10 },
+                }
             },
 
             ZI::JumpRelative(condition, opaddr) => {
@@ -798,6 +823,13 @@ impl Z80 {
                     // increment pc by e signed
                     self.registers.pc = 
                         Z80::add_signed_u8_to_u16(self.registers.pc, e-2);
+
+                    // T-states
+                    12
+                }
+                else {
+                    // T-states
+                    7
                 }
             },
 
@@ -821,6 +853,13 @@ impl Z80 {
                     // Increment PC by e signed
                     self.registers.pc =
                         Z80::add_signed_u8_to_u16(self.registers.pc, e-2);
+
+                    // T-states
+                    13
+                }
+                else {
+                    // T-states
+                    8
                 }
 
             },
@@ -849,6 +888,13 @@ impl Z80 {
 
                     // jump to nn
                     self.registers.pc = addr;
+
+                    // T-states
+                    17
+                }
+                else {
+                    // T-states
+                    10
                 }
             },
 
@@ -867,6 +913,16 @@ impl Z80 {
                     self.registers.sp += 2;
                     // jump to address
                     self.registers.pc = addr;
+
+                    // T-states
+                    match condition {
+                        ZJC::Unconditionnal => { 10 },
+                        _ => { 11 },
+                    }
+                }
+                else {
+                    // T-states
+                    5
                 }
             },
 
@@ -884,6 +940,9 @@ impl Z80 {
                 self.bus.cpu_write_u16(self.registers.sp, self.registers.pc);
                 // jump to address
                 self.registers.pc = addr;
+
+                // T-states
+                11
             },
 
             ZI::Push(op) => {
@@ -907,6 +966,12 @@ impl Z80 {
                 self.bus.cpu_write_u16(self.registers.sp, word);
                 // jump to address
 
+                // T-states
+                match op {
+                    ZIL::RegisterIX => { 15 },
+                    ZIL::RegisterIY => { 15 },
+                    _ => { 11 },
+                }
             },
 
             ZI::Pop(op) => {
@@ -931,6 +996,13 @@ impl Z80 {
                     ZIL::RegisterIY => { self.registers.iy = word }
                   _ => { panic!("unhandled operand: {}", op.to_string()) }
                 };
+
+                // T-states
+                match op {
+                    ZIL::RegisterIX => { 14 },
+                    ZIL::RegisterIY => { 14 },
+                    _ => { 10 },
+                }
             },
 
             ZI::Exchange(opa, opb) => {
@@ -945,6 +1017,12 @@ impl Z80 {
                 let wb = self.read_EX_operand(opb);
                 self.write_EX_operand(opa, wb);
                 self.write_EX_operand(opb, wa);
+
+                // T-states
+                match opa {
+                    ZIL::RegisterIndirectSP => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::ExchangeX => {
@@ -961,6 +1039,9 @@ impl Z80 {
                 mem::swap(&mut r.e, &mut ar.e);
                 mem::swap(&mut r.h, &mut ar.h);
                 mem::swap(&mut r.l, &mut ar.l);
+
+                // T-states
+                4
             },
 
             ZI::Add(opv) => {
@@ -977,6 +1058,14 @@ impl Z80 {
 
                 
                 self.registers.flags.set(ZSF::N, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::AddCarry(opv) => {
@@ -990,6 +1079,14 @@ impl Z80 {
                     Z80::add8_with_carry(self.registers.a, value, &mut self.registers.flags);
 
                 self.registers.flags.set(ZSF::N, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Sub(opv) => {
@@ -1010,6 +1107,14 @@ impl Z80 {
                 self.registers.flags.toggle(ZSF::H);
 
                 self.registers.flags.set(ZSF::N, true);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::SubCarry(opv) => {
@@ -1030,6 +1135,14 @@ impl Z80 {
                 self.registers.flags.toggle(ZSF::H);
 
                 self.registers.flags.set(ZSF::N, true);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Compare(opv) => {
@@ -1053,6 +1166,14 @@ impl Z80 {
                 self.registers.flags.toggle(ZSF::H);
 
                 self.registers.flags.set(ZSF::N, true);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Add16(oplhs, oprhs) => {
@@ -1104,6 +1225,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::S, flag_s);
                 self.registers.flags.set(ZSF::Z, flag_z);
                 self.registers.flags.set(ZSF::PV, flag_pv);
+
+                // T-states
+                match oplhs {
+                    ZIL::RegisterHL => { 11 },
+                    ZIL::RegisterIX => { 15 },
+                    ZIL::RegisterIY => { 15 },
+                    _ => { 0 },
+                }
             },
 
             ZI::Add16Carry(oplhs, oprhs) => {
@@ -1137,6 +1266,9 @@ impl Z80 {
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, false);
+
+                // T-states
+                15
             },
 
             ZI::Sub16Carry(oplhs, oprhs) => {
@@ -1166,6 +1298,9 @@ impl Z80 {
                 // update status flags
                 // add/sub
                 self.registers.flags.set(ZSF::N, true);
+
+                // T-states
+                15
             },
             
             ZI::ComplementAccumulator => {
@@ -1178,6 +1313,9 @@ impl Z80 {
 
                 self.registers.flags.set(ZSF::H, true);
                 self.registers.flags.set(ZSF::N, true);
+
+                // T-states
+                4
             },
 
             ZI::ComplementCarryFlag => {
@@ -1187,6 +1325,9 @@ impl Z80 {
 
                 // status register carry flag is inverted
                 self.registers.flags.toggle(ZSF::C);
+
+                // T-states
+                4
             },
 
             ZI::SetCarryFlag => {
@@ -1196,6 +1337,9 @@ impl Z80 {
 
                 // status register carry flag is set
                 self.registers.flags.insert(ZSF::C);
+
+                // T-states
+                4
             },
 
             ZI::DecimalAdujstAccumulator => {
@@ -1233,6 +1377,9 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(*a));
                 self.registers.flags.set(ZSF::Z, *a == 0);
                 self.registers.flags.set(ZSF::S, *a & 0x80 != 0);
+
+                // T-states
+                4
             },
 
             ZI::NegateAccumulator => {
@@ -1259,6 +1406,9 @@ impl Z80 {
                 self.registers.flags.set(ZSF::Z, temp == 0);
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                4
             },
 
             ZI::Increment(op) => {
@@ -1275,6 +1425,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::N, false);
                 // recover carry flag
                 self.registers.flags.set(ZSF::C, carry);
+
+                // T-states
+                match op {
+                    ZIL::RegisterIndirectHL => { 11 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Increment16(op) => {
@@ -1283,6 +1441,13 @@ impl Z80 {
                 self.increment16(op, 1);
                 // add/sub 
                 self.registers.flags.set(ZSF::N, false);
+
+                // T-states
+                match op {
+                    ZIL::RegisterIX => { 10 },
+                    ZIL::RegisterIY => { 10 },
+                    _ => { 6 },
+                }
             },
 
             ZI::Decrement(op) => {
@@ -1299,12 +1464,27 @@ impl Z80 {
                 self.registers.flags.set(ZSF::N, false);
                 // recover carry flag
                 self.registers.flags.set(ZSF::C, carry);
+
+                // T-states
+                match op {
+                    ZIL::RegisterIndirectHL => { 11 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Decrement16(op) => {
                 // DEC ss   p.201
                 // ...
                 self.increment16(op, -1);
+
+                // T-states
+                match op {
+                    ZIL::RegisterIX => { 10 },
+                    ZIL::RegisterIY => { 10 },
+                    _ => { 6 },
+                }
             },
 
             ZI::And(opv) => {
@@ -1329,6 +1509,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::C, false);
                 // half-carry
                 self.registers.flags.set(ZSF::H, true);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Or(opv) => {
@@ -1353,6 +1541,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::C, false);
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+                
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Xor(opv) => {
@@ -1377,6 +1573,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::C, false);
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 7 },
+                    ZIL::IndexedIX(_) => { 19 },
+                    ZIL::IndexedIY(_) => { 19 },
+                    _ => { 4 },
+                }
             },
 
             ZI::Bit(b, op) => {
@@ -1393,6 +1597,13 @@ impl Z80 {
                 self.registers.flags.set(ZSF::N, false);
                 self.registers.flags.set(ZSF::H, true);
 
+                // T-states
+                match op {
+                    ZIL::RegisterIndirectHL => { 12 },
+                    ZIL::IndexedIX(_) => { 20 },
+                    ZIL::IndexedIY(_) => { 20 },
+                    _ => { 8 },
+                }
             },
 
             ZI::Set(b, op) => {
@@ -1407,6 +1618,14 @@ impl Z80 {
                 self.write_AND_operand(op, byte);
 
                 // no condition bits are affected by this operation
+                
+                // T-states
+                match op {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             },
 
             ZI::Reset(b, op) => {
@@ -1418,6 +1637,14 @@ impl Z80 {
                 self.write_AND_operand(op, byte);
 
                 // no condition bits are affected by this operation
+                
+                // T-states
+                match op {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             }
 
             ZI::ShiftLeftArithmetic(opv) => {
@@ -1446,6 +1673,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             },
 
             ZI::ShiftRightArithmetic(opv) => {
@@ -1478,6 +1713,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             },
 
             ZI::ShiftRightLogic(opv) => {
@@ -1506,6 +1749,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             },
 
             ZI::RotateLeftCarry(opv) => {
@@ -1538,6 +1789,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             }
 
             ZI::RotateLeft(opv) => {
@@ -1570,6 +1829,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             },
 
             ZI::RotateRightCarry(opv) => {
@@ -1602,6 +1869,14 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             }
 
             ZI::RotateRight(opv) => {
@@ -1634,38 +1909,66 @@ impl Z80 {
                 self.registers.flags.set(ZSF::PV, Z80::compute_u8_parity(byte));
                 // half-carry
                 self.registers.flags.set(ZSF::H, false);
+
+                // T-states
+                match opv {
+                    ZIL::RegisterIndirectHL => { 15 },
+                    ZIL::IndexedIX(_) => { 23 },
+                    ZIL::IndexedIY(_) => { 23 },
+                    _ => { 8 },
+                }
             },
 
             ZI::LoadIncrement => {
-                self.load_increment(1)
+                self.load_increment(1);
+
+                // T-states
+                16
             },
 
             ZI::LoadDecrement => {
-                self.load_increment(-1)
+                self.load_increment(-1);
+
+                // T-states
+                16
             },
 
             ZI::LoadIncrementRepeat => {
                 // LDIR     p.132
 
+                let mut states = 0;
+
                 // execute LDI while BC != 0
                 loop {
                     self.load_increment(1);
                     if(self.registers.BC() == 0) {
+                        states += 16;
                         break;
                     }
+                    states += 21;
                 }
+
+                // T-states
+                states
             },
 
             ZI::LoadDecrementRepeat => {
                 // LDDR     p.132
 
+                let mut states = 0;
+
                 // execute LDR while BC != 0
                 loop {
                     self.load_increment(-1);
                     if(self.registers.BC() == 0) {
+                        states += 16;
                         break;
                     }
+                    states += 21;
                 }
+                
+                // T-states
+                states
             },
 
             ZI::Load(dst, src) => {
@@ -1712,6 +2015,24 @@ impl Z80 {
                     },
                     _ => { panic!("unhandled operand: {}", dst.to_string()) }
                 }
+
+                // T-states
+                match dst {
+                    ZIL::RegisterA => match src {
+                        ZIL::Indirect16(_) => { 13 },
+                        ZIL::RegisterIndirectBC => { 7 },
+                        _ => { 7 },
+                    },
+                    ZIL::Indirect16(_) => { 13 },
+                    ZIL::RegisterIndirectBC => { 7 },
+                    ZIL::RegisterIndirectDE => { 7 },
+                    _ => match src {
+                        ZIL::RegisterIndirectHL => { 7 },
+                        ZIL::IndexedIX(_) => { 19 },
+                        ZIL::IndexedIY(_) => { 19 },
+                        _ => { 4 },
+                    }
+                }
             },
 
             ZI::Load16(dst, src) => {
@@ -1741,6 +2062,25 @@ impl Z80 {
                     ZIL::RegisterIY => { self.registers.iy = value },
                     _ => { panic!("unhandled operand: {}", dst.to_string()) }
                 }
+
+                // T-states
+                match dst {
+                    ZIL::Indirect16(_) => { 20 },
+                    ZIL::RegisterIX => match src {
+                        ZIL::Indirect16(_) => { 20 },
+                        _ => { 14 },
+                    },
+                    ZIL::RegisterIY => match src {
+                        ZIL::Indirect16(_) => { 20 },
+                        _ => { 14 },
+                    },
+                    ZIL::RegisterSP => match src {
+                        ZIL::RegisterHL => { 6 },
+                        _ => { 10 },
+                    },
+
+                    _ => { 10 },
+                }
             },
 
             ZI::In(dst,src) => {
@@ -1767,6 +2107,12 @@ impl Z80 {
                     ZIL::RegisterL => { self.registers.l = byte; },
                     _ => { panic!("unhandled operand: {}", dst.to_string()) }
                 }
+
+                // T-states
+                match dst {
+                    ZIL::RegisterA => { 11 },
+                    _ => { 12 },
+                }
             },
 
             ZI::Out(dst,src) => {
@@ -1792,23 +2138,39 @@ impl Z80 {
 
                 // write byte on IO bus
                 self.bus.io_write(addr, byte);
+
+                // T-states
+                match dst {
+                    ZIL::RegisterA => { 11 },
+                    _ => { 12 },
+                }
             },
 
             ZI::OutIncrement => {
                 // OUTI     p.309
                 
-                self.out_increment()
+                self.out_increment();
+
+                // T-states
+                16
             },
 
             ZI::OutIncrementRepeat => {
                 // OTIR    p.311
                 
+                let mut states = 0;
+
                 loop {
                     self.out_increment();
                     if(self.registers.b == 0) {
+                        states += 16;
                         break;
                     }
+                    states += 21;
                 }
+
+                // T-states
+                states
             },
 
             _ => {

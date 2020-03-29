@@ -17,10 +17,9 @@ pub struct GameGear {
     pub instructions: VecDeque<String>,
 
     // debug file
-    debug_file: File,
 
-    // step counter
-    steps: u32,
+    // last scanline in cpu cycles
+    last_scanline_cycle: u64,
 }
 
 impl GameGear {
@@ -45,8 +44,7 @@ impl GameGear {
         GameGear {
             cpu: cpu,
             instructions: VecDeque::new(),
-            debug_file: File::create("/tmp/rgg.trace").unwrap(),
-            steps: 0,
+            last_scanline_cycle: 0,
         }
     }
 
@@ -58,7 +56,7 @@ impl GameGear {
         self.cpu.bus.joystick.set_state(b,state)
     }
 
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> (bool,bool) {
 
         // emulate for one scaneline
         //
@@ -68,8 +66,8 @@ impl GameGear {
         // Z80 runs at 3.579545 MHz
         // Z80 can run approx 266 clocks cycles per scanline
 
+        let mut new_frame = false;
         let mut will_break = self.cpu.step();
-        self.steps += 1;
 
         // VDP may trigger a breakpoint
         will_break |= self.cpu.bus.vdp.will_break();
@@ -77,18 +75,18 @@ impl GameGear {
         // push last decoded instruction to debug
         let ass = self.cpu.dissassembly_debug_string();
 
-        //self.debug_file.write(ass.as_bytes());
-        //self.debug_file.write("\n".as_bytes());
-        //self.debug_file.flush();
-
         self.instructions.push_front(ass);
 
         self.instructions.truncate(15);
         
-        if self.steps > 20 {
+        // duration in CPU cycles since last scanline
+        let delta_sc = self.cpu.cycles() - self.last_scanline_cycle;
+        if delta_sc > 266 {
             // currently increase one scaneline
-            let irq = self.cpu.bus.vdp.step();
-            self.steps = 0;
+            let (irq, nf) = self.cpu.bus.vdp.step();
+            new_frame = nf;
+
+            self.last_scanline_cycle = self.cpu.cycles();
 
             // propagate IRQ to CPU
             if irq {
@@ -96,7 +94,7 @@ impl GameGear {
             }
         }
 
-        will_break
+        (will_break, new_frame)
     }
 }
 

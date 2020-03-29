@@ -38,9 +38,8 @@ impl EmulatorWindow {
             RamWatcher { addr: 0xd401, name: "sonic Y".to_string() },
             RamWatcher { addr: 0xd2cf, name: "timer mins".to_string() },
             RamWatcher { addr: 0xd2d0, name: "timer secs".to_string() },
-            RamWatcher { addr: 0xd2d1, name: "timer secs".to_string() },
+            RamWatcher { addr: 0xd2d1, name: "timer frames".to_string() },
         ];
-
         Ok(EmulatorWindow {
             gg: gg,
             font:font,
@@ -48,16 +47,6 @@ impl EmulatorWindow {
             run_one: false,
             ram_watchers: watchers,
         })
-    }
-
-    fn run(&mut self, steps: usize) {
-        for i in 0..steps {
-            if self.gg.step() {
-                self.running = false;
-                self.run_one = false;
-                break;
-            }
-        }
     }
 
 }
@@ -104,14 +93,28 @@ impl event::EventHandler for EmulatorWindow {
 
         const DESIRED_FPS: u32 = 60;
 
-        while timer::check_update_time(ctx, DESIRED_FPS) {
-            
+        loop {
             if self.running {
-                self.run(3000);
+                // step till next frame is ready
+                let (breakpoint,new_frame) = self.gg.step();
+                if breakpoint {
+                    // breakpoint reached
+                    self.running = false;
+                    self.run_one = false;
+                }
+
+                // next frame ready
+                if new_frame {
+                    break;
+                }
             }
             else if self.run_one {
-                self.run(1);
+                self.gg.step();
                 self.run_one = false;
+                break;
+            }
+            else {
+                break;
             }
         }
 
