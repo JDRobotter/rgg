@@ -184,6 +184,7 @@ impl Pattern {
 }
 
 /// Sprite attributes
+#[derive(Debug)]
 struct Sprite {
     // vertical position
     x: u8,
@@ -409,28 +410,38 @@ impl VDP {
         addr << 7
     }
 
-    fn blit_to_screen(&mut self, bx:usize, by:usize, p:Pattern) {
+    fn blit_to_screen(&mut self, bx:isize, by:isize, p:Pattern) {
         self.blit_to_screen_ex(bx,by,p,false,false)
     }
 
     fn blit_to_screen_ex(&mut self,
-                            bx:usize, by:usize,
+                            bx:isize, by:isize,
                             p:Pattern,
                             reverse_horizontal:bool,
                             reverse_vertical:bool) {
         for dy in 0..8 {
             let y = by + dy;
             for dx in 0..8 {
-                
+
                 let cdx = if reverse_horizontal { 7 - dx } else { dx };
                 let cdy = if reverse_vertical   { 7 - dy } else { dy };
-                let color = p.get(cdx,cdy);
+                if cdx >= 0 && cdy >= 0 {
+                    let cdx = cdx as usize;
+                    let cdy = cdy as usize;
+                    let color = p.get(cdx,cdy);
 
-                // skip is color is transparent
-                if color.alpha() {
-                    let x = bx + dx;
-                    if (x < 256) && (y < 224) {
-                        self.screen[256*y + x] = color;
+                    // skip is color is transparent
+                    if color.alpha() {
+                        let x = bx + dx;
+                        if (x > 0) 
+                            && (y > 0) 
+                            && (x < 256)
+                            && (y < 224) {
+
+                            let x = x as usize;
+                            let y = y as usize;
+                            self.screen[256*y + x] = color;
+                        }
                     }
                 }
             }
@@ -458,8 +469,8 @@ impl VDP {
         let mut p: u16 = self.name_table_base_address();
         
         // fetch scroll registers 
-        let hscroll = self.registers[8] as i8;
-        let vscroll = self.registers[9] as i8;
+        let hscroll = self.registers[8] as isize;
+        let vscroll = self.registers[9] as isize;
 
         // -- render tiles --
         for y in 0..28 {
@@ -467,7 +478,7 @@ impl VDP {
                 // read background tile information from table
                 let word = self.read_vram_u16(p);
                 let bg = BgTile::from(word);
-            
+         
                 // update debug tile matrix
                 self.debug_tiles_matrix[32*y + x] = bg.pattern;
 
@@ -478,9 +489,10 @@ impl VDP {
                 );
              
                 // blit patterns to screen
-                let px:usize = (hscroll as usize + x*8) % 256;
-                let py:usize = -vscroll as usize + y*8; 
-                self.blit_to_screen_ex(px,py,pattern,
+                let px:isize = (hscroll + (x as isize)*8).rem_euclid(256);
+                let py:isize = ((y as isize)*8 - vscroll).rem_euclid(224);
+
+                self.blit_to_screen_ex(px, py, pattern,
                                         bg.horizontal_flip,
                                         bg.vertical_flip);
 
@@ -497,10 +509,9 @@ impl VDP {
             // read sprite information and pattern from table
             let sp = self.get_sprite(sidx);
  
-            let sx = sp.x as usize;
-            let sy = sp.y as usize;
+            let sx = sp.x as isize;
+            let sy = sp.y as isize;
             match sx {
-                /*
                 0xd0 => {
                     // at a vertical pos., 0xd0 has the meaning of an end code
                     break;
@@ -509,13 +520,10 @@ impl VDP {
                     // at a vertical pos., 0xe0 prevent a sprite from being displayed
                     continue;
                 },
-                */
                 _ => {
                     // nothing to do
                 }
             };
-
-            // at a vertical position, 0xd0 has the meaning of an end code
 
             match spsz {
                 SpriteSize::SIZE_8x8 => {
