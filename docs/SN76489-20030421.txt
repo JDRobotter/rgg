@@ -1,0 +1,495 @@
+SN79489 notes
+=============
+
+This is a document to clear up a few inaccuracies regarding this chip
+(existing inaccuracies are mentioned in particular, usually marked
+> like this <), and also to document everything there is to know about
+it.
+
+Note that most of this is written based on tests on a PAL Master System
+II, and references are to SMS games. If other systems differ slightly,
+I won't know about it - unless you can run tests for me.
+
+
+SN76489 sightings
+=================
+
+The SN76489AN discrete chip is used in Sega's SG-1000 Mark I and II,
+and SC-3000 machines. I do not know if the Mark III has a discrete chip
+or not. The Master System, Game Gear and Mega Drive have it integrated
+into their VDPs, for backward compatibility to varying extents.
+
+The Mega Drive "chip" is often referred to as an SN76496. As far as I
+am aware, the two are functionally identical since the Mega Drive's is
+provided for backward compatibility.
+
+It is written to on all of those machines by writing a byte to port $7f
+or, less commonly, $7e.
+
+It is also used as a discrete part on the BBC Micro computer.
+
+The ColecoVision uses it too, probably as a discrete chip as the
+ColecoVision has virtually no custom chips. The Coleco Adam presumably
+has one too.
+
+It is undoubtedly used in a LOT of arcade machines.
+
+
+SN76489 registers
+=================
+
+The SN76489 has 8 "registers" - 4 x 4 bit volume registers, 3 x 10 bit
+tone registers and 1 x 4 bit noise register*.
+
+Channel   Volume registers   Tone/noise registers
+0 (%00)       Vol0                Tone0
+1 (%01)       Vol1                Tone1
+2 (%10)       Vol2                Tone2
+3 (%11)       Vol3                Noise
+
+* The noise register only uses 3 bits but for descriptive and hardware
+  reasons it's 4. The tone registers could also be more likely sizes,
+  ie. 16 bits.
+
+All volume registers are initially set to off (%1111), all tone/noise
+registers to zero (off/high shift rate periodic noise). The initially
+latched register is Tone0. This initialisation may be done by the BIOS
+on my SMS2; on an SC-3000 the machine boots with the PSG in a seemingly
+random state.
+
+
+SN76489 writes
+==============
+
+When a byte is written to the PSG, it processes it as follows:
+
+If bit 7 is 1 then the byte is a LATCH/DATA byte.
+
+  %1cctdddd
+    |||````-- Data
+    ||`------ Type
+    ``------- Channel
+
+  Bits 6 and 5 give the channel to be latched, ALWAYS. This selects the
+  row in the above table. Bit 4 determines whether to latch volume (1)
+  or tone/noise (0) data - this gives the column.
+
+  The remaining 4 bits are placed into the low 4 bits of the relevant
+  register.
+
+> The latched register is NEVER cleared by a data byte. <
+
+If bit 7 is 0 then the byte is a DATA byte.
+
+  %0xdddddd
+    |``````-- Data
+    `-------- Unused
+
+  If the currently latched register is a tone register then the low 6
+  bits of the byte are placed into the high 6 bits of the latched
+  register. Otherwise, the low 4 bits are placed into the low 4 bits
+  of the relevant register*.
+
+  * In hardware, it doesn't need to know about the size of the register
+    being written to as the effect of trying to write to bits 9-4 of a
+    4-bit register is to write the low 4 bits to bits 3-0 (the bit
+    written is modulo 4 and the highest bits are overwritten by the
+    lowest). This isn't really important, in an emulator you'd just
+    check if the latched register is a tone register.
+
+This means that the following data will have the following effect
+(spacing added for clarity, hopefully):
+
+1. %1 00 0 1110      Latch, channel 0, tone, data 1110
+   %0 0  001111      Data 001111
+   Set channel 0 tone to 0011111110 = 0xfe = 440Hz
+
+2. %1 01 1 1111      Latch, channel 1, volume, data 1111
+   Set channel 1 volume to 0xf (silent)
+
+3. %1 10 1 1111      Latch, channel 2, volume, data 1111
+   %0 0  000000      Data 000000
+   Set channel 2 volume to 0xf (silent)
+   THEN update it to 0x0 (full)
+ > The data byte is NOT ignored. <
+
+4. %1 11 0 0101      Latch, channel 3, noise, data 0101
+   Set noise register to (0)101 (white noise, medium shift rate)
+
+5. %1 11 0 0101      Latch, channel 3, noise, data 0101
+   %0 0  000100      Data 000100
+   Set noise register to (0)101 (white noise, medium shift rate)
+   THEN update it to (0)100 (white noise, high shift rate)
+ > The data byte is NOT ignored. <
+
+Numbers 1, 2 and 4 above are the same as is described in the various
+existing docs.
+
+Number 3 IS USED - when pausing between text boxes in Alex Kidd in
+Miracle World, it is used to silence the sound. Emulators not
+supporting this ouput a constant tone instead.
+
+Number 5 IS USED by some Codemasters games (Micro Machines, Excellent
+Dizzy, possibly others). They were written without official
+documentation so they always latch the noise channel with the data bits
+set to 0, which gives high shift rate "periodic noise", and write the
+wanted settings as a data byte. Emulators which then ignore the data
+byte will produce the periodic noise which sounds like a high-pitched
+"eek" instead of a drum beat.
+
+Many games also produce the above two unusual behaviours but not
+repeatedly (often when a SFX is first played, for example).
+
+Also of note is that the tone register updates immediately when the
+data byte is written:
+
+  Data written  Tone0 contents
+  %1 00 0 0000    %------0000      - signifies an unknown bit
+  %0 0  000000    %0000000000      (whatever was previously
+  %1 00 0 1111    %0000001111      in the register)
+  %0 0  111111    %1111111111
+
+There were a couple of ways to handle PSG writes before:
+
+1. Latch only the tone registers, as above, and leave them latched when
+   other types of data (volume, noise) are written. This gives a
+   "squawk" effect on Micro Machines' title screen, which drowns out
+   the "eek".
+
+2. Latch tone registers as above, and "unlatch" when other types of
+   data are written. When a data byte is written with it unlatched, the
+   data is discarded. This fixes the "squawk" but leaves the "eek".
+
+
+How the SN76489 makes sound
+===========================
+
+This is already well documented, but I'll repeat it again with
+(hopefully) a more hardware-related perspective:
+
+The PSG is connected to the system clock, which is 3579545Hz for NTSC
+systems and 3546893Hz for PAL/SECAM systems. It divides this clock by
+16 to get its internal clock.
+
+For each channel (all 4) there is a 10 bit counter. Each clock cycle,
+the counter is decremented (if it is non-zero). If, after being
+decremented, it is zero, the following happens:
+
+1. For tone channels: the counter is reset to the value currently in the
+   corresponding register (eg. Tone0 for channel 0). The polarity of
+   the output is changed, ie. if it is currently outputting -1 then it
+   outputs +1, and vice versa. This output is passed to the mixer (see
+   below). The initial output value may be arbitrarily set.
+
+   So, it produces a square wave output with wavelength twice the value
+   in the corresponding register (measured in clock ticks). The
+   frequency of this can be calculated by
+
+                   Input clock /Hz (3579545)
+   Frequency /Hz = -------------------------
+                      32 x register value
+
+   so, for example, 0x0fe gives 440Hz.
+
+   If the register value is zero then the output is a constant value of
+   +1.
+
+2. For the noise channel: the counter is reset according to the low 2
+   bits of the noise register as follows:
+
+   Low 2 bits    Value counter
+   of register    is reset to
+       00            0x10
+       01            0x20
+       10            0x40
+       11            Tone2
+
+   As with the tone channels, the output changes polarity when it
+   reaches zero. However, this is not sent to the mixer, but to a
+   "linear feedback shift register" (LFSR), which generates noise.
+
+   The LFSR is an array of 16 bits. When its input shifts from -1 to +1
+   (ie. only ONCE for every two times the counter reaches zero), the
+   array is shifted by one bit; the direction doesn't matter, it just
+   changes what numbers you use, so I will arbitrarily say it shifts
+   right. The bit that is shifted off the end is output to the mixer
+   (either +1 or 0 - NOT -1).
+
+   The input bit is determined by an linear XOR feedback network. This
+   basically means that a certain pattern of bits is "tapped", and the
+   bits contained in them (before shifting) are XORed together. This is
+   equivalent to calculating the parity of the tapped bits - if there
+   are an even number of 1s, the XOR will be 0, and odd number will
+   give a result of 1.
+
+   For white noise (Noise register bit 2 = 1):
+
+     For the SMS (1 and 2), Genesis and Game Gear, the tapped bits are
+     bits 0 and 3. For the SC-3000H, the tapped bits are bits 1 and 2.
+     For the BBC Micro, using John Kortink's data, the tapped bits are
+     15, 2 and 0. I would like to confirm the bit pattern for other
+     systems, please contact me if you can help by running/coding
+     homebrew code on a real system and sampling the sound.
+
+   For "periodic noise" (Noise register bit 2 = 0):
+
+     Only bit 0 is tapped, ie. the output bit is also the input bit.
+     The effect of this is to output the contents of the shift register
+     in a 16-bit long loop.
+
+   When the Noise register is written to, the shift register is reset,
+   for both my SMS2 and John Kortink's BBC Micro to the value of 0x8000
+   (only bit 15 set)*. This will make the "periodic" noise output a
+   1/16th duty cycle (15 0s followed by one 1), and is important as it
+   affects the sound of white noise.
+
+   * The convention with LFSRs is to reset them with either only one,
+     or all but one, bit set. When testing, sometimes the initial value
+     seems to be 0x4000 or 0x2000, which is presumably due to the shift
+     register shifting a bit or two while data is being written
+     (depending on its initial state). In any case, the effect is almost 
+     negligible.
+
+The mixer then multiplies each channel's output by the corresponding
+volume, and sums them. The result is output to an amplifier which
+amplifies them to suitable levels for output as audio.
+
+
+An implementation of the noise shift register
+=============================================
+
+The method of generating white noise is the most fundamentally incorrect
+thing in the majority of existing software emulators of the SN76489. The
+most common method is to do something like:
+
+#define WHITE_NOISE_FEEDBACK 0xf037   ; or some other value
+#define PERIODIC_NOISE_FEEDBACK 0x8000
+...
+    ShiftRegister>>=1;
+    ShiftRegister^=(WhiteNoise?WHITE_NOISE_FEEDBACK:PERIODIC_FEEDBACK);
+    Output=ShiftRegister&1;
+
+With the correct choice of periodic feedback parameter (depending on
+the ordering of the shift, xor and output), the periodic noise will be
+correct with this method. However, exhaustive tests have shown that
+there is no white noise feedback parameter that can produce correct
+output with this method; although certain values do indeed produce
+fairly pseudo-random output (white noise).
+
+The correct method is to do this in its place:
+
+    ShiftRegister=(ShiftRegister>>1) |
+                  ((WhiteNoise
+                    ?parity(ShiftRegister&TappedBits)
+                    :ShiftRegister&1)<<15);
+    Output=ShiftRegister&1;
+
+where parity() is a function that returns 1 if its (16-bit unsigned int)
+parameter has an odd number of bits set and 0 otherwise; and TappedBits
+depends on the system being emulated (and so should be a variable, not a
+constant, for any emulation that is supposed to handle more than one of
+the known feedback types), for example 0x0009 for the Master System
+(bits 0 and 3 set). Here is the best implementation of parity() I have
+found in tests:
+
+int parity(int val) {
+	val^=val>>8;
+	val^=val>>4;
+	val^=val>>2;
+	val^=val>>1;
+	return val;
+};
+
+Thanks go to Dave (finaldave) for coming up with this. Note that val
+should be only 16 bits, but you may want to make it return val&1 for
+safety. You may get faster results with expressions tailored to certain
+common feedback patterns.
+
+
+The imperfect SN76489
+=====================
+
+Real components aren't perfect. The output of the SN76489 in its
+various implementations can be severely affected by this.
+
+(The SMS2's output is the most severely affected of those I have seen;
+the Game Gear is pretty good, and since the SC-3000's was taken directly
+from the chip it is also not affected much.)
+
+Wherever a voltage (output) is artificially held away from zero, there
+will be leakage and the actual output will decay towards zero at a rate
+proportional to the offset from zero:
+
+    dV
+    -- = -kV   where k is a constant
+    dt
+
+This affects the output from the SN76489.
+
+The effect on the tone channels is to change the shape of their output
+waves from this:
+
+---------+         +---------+         +---------+         +---------+
+         |         |         |         |         |         |         |
+         |         |         |         |         |         |         |
+- - - - -|- - - - -|- - - - -|- - - - -|- - - - -|- - - - -|- - - - -|-
+         |         |         |         |         |         |         |
+         |         |         |         |         |         |         |
+         +---------+         +---------+         +---------+         +--
+
+to something like this:
+
+-__                +-__                +-__                +-__
+   ¯¯?--+         |   ¯¯?--+         |   ¯¯?--+         |   ¯¯?--+
+         |         |         |         |         |         |         |
+- - - - -|- - - - -|- - - - -|- - - - -|- - - - -|- - - - -|- - - - -|-
+         |         |         |         |         |         |         |
+         |   ___---+         |   ___---+         |   ___---+         |
+         +-¯¯                +-¯¯                +-¯¯                +-?
+
+
+If the tone register value is large enough, they will decay close to
+zero.
+
+If the tone register value is zero, the constant offset output will
+just decay to zero. However, whenever the volume of the output is
+changed, the constant offset is restored. This allows speech effects.
+
+The effect on the noise generator's output is this:
+
+Signal generator output, for reference:
+
+
+----+    +----+    +----+    +----+    +----+    +----+    +----+    +--
+- - | - -|- - | - -|- - | - -|- - | - -|- - | - -|- - | - -|- - | - -|-
+    +----+    +----+    +----+    +----+    +----+    +----+    +----+
+
+Perfect output (assuming output bit pattern of 10100101):
+
+---------+         +---------+                   +---------+         +--
+         |         |         |                   |         |         |
+         |         |         |                   |         |         |
+- - - - -+---------+- - - - -+-------------------+- - - - -+---------+-
+
+Actual output:
+
+-__                +-__                          +-__                +-_
+   ¯¯?--+         |   ¯¯?--+                   |   ¯¯?--+         |
+         |         |         |                   |         |         |
+- - - - -|- - __---+- - - - -|- - __-------------+- - - - -|- - __---+-
+         +-¯¯                +-¯¯                          +-¯¯
+
+
+The empirical effects are:
+- The sound of tones is changed very slightly
+- Noise sounds a bit louder
+- Voices sound slightly different
+
+Some games were programmed with the PSG considered to be a perfect
+device, for example for PCM voice effects.
+
+
+Noise volume
+============
+
+As previously described, the noise output is either 0 or +1, multiplied
+by the noise volume. The noise should never output a negative wave and
+its volume scale is identical to that of the tone channels.
+
+However, for a system where people are used to certain imperfections in
+the output (see above), this can result in noise which seems "too
+quiet", especially when people are comparing to the output from a TV
+speaker which will have altered the sound some more, tending to have a
+disproportionate bass response making the noise seem even louder.
+
+An quick and easy, if not very accurate, solution is to double the
+noise volume when mixing the channels together.
+
+
+Playing samples on the SN76489
+==============================
+
+This is for the reference of those wishing to put sample playback in
+their demos, and for those whose sound core doesn't do voices.
+
+It is possible to play samples in two ways:
+
+1. Pulse Width Modulation
+
+   This works by outputting pulses at constant volume whose width and
+   spacing gives the effect of different frequencies and volumes. This
+   is also how samples are played on PC internal speakers. On the
+   SN76489, this is done by:
+
+   1. Setting all 3 tone channels to frequency 0x000
+   2. At rapid, closely timed intervals, setting the output volume of
+      all 3 to either 0xf (off) or 0x0 (full).
+
+   All three channels are used to get maximum volume.
+
+   PWM is not very good quality (often the sound is unintelligible, for
+   example Alex Kidd: the Lost Stars' "Find/I'm the Miracle Ball" and
+   Shooting Gallery's "Perfect"), but it is the loudest way to play
+   samples.
+
+2. Pulse Code Modulation
+
+   This is the usual way to store and output waves. The desired speaker
+   position is stored digitally and the output volume is proportional
+   to that. On the SN76489, this is done by:
+
+   1. Setting all 3 tone channels to frequency 0x000
+   2. At rapid, closely timed intervals, setting the output volume of
+      all 3 to values stored in ROM.
+
+   In other words, the volume setting is used as a 4-bit DAC. Again,
+   all three are used together to get maximum volume.
+
+   PCM is better quality, if the wave is well converted to 4 bits per
+   sample, but quieter than PWM. It can only sound as good as the
+   original 4 bit wave, which is not very high quality to start with.
+
+
+Game Gear stereo extension
+==========================
+
+When a byte is written to port 0x06 on the Game Gear, the PSG output is
+affected as follows:
+
+  Bit  Channel
+   0      0    -
+   1      1     | Right
+   2      2     |
+   3      3    -
+   4      0    -
+   5      1     | Left
+   6      2     |
+   7      3    -
+
+If a bit is set, the corresponding channel is output to the
+corresponding side. So, 0xff outputs all channels to all sides, 0xf0
+outputs to rhe left side only, etc.
+
+
+Maxim
+maxim@mwos.cjb.net
+21/4/2003
+
+Updated 6/6/2002:
+Clarification that PSG tones update immediately after latch byte.
+Use of 2-stage volume writes found.
+
+Updated 22/8/2002:
+Charles MacDonald sampled GG and Genesis noise for me, it's the same
+bit pattern as SMS noise.
+
+Updated 20/10/2002:
+Fixed some typos.
+
+Updated 21/3/2003:
+Added SC-3000H noise feedback pattern, thanks to Charles MacDonald for
+getting the data for me.
+
+Updated 21/4/2003:
+Charles MacDonald sampled SMS1 noise, it's the same bit pattern as the 
+SMS2, GG and Genesis.

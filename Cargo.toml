@@ -11,3 +11,4 @@ clap = "2.33.0"
 bitflags = "1.2.1"
 ggez = "0.5.1"
 cgmath = { version="0.17.0", features=["mint"]}
+cpal = "0.11.0"

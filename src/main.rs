@@ -17,6 +17,7 @@ mod system;
 mod memory;
 mod gui;
 mod bits;
+mod audio;
 
 fn main() -> GameResult {
     let _matches = App::new("RGG emulator")

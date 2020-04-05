@@ -2,6 +2,7 @@
 use crate::memory::Rom;
 use crate::memory::Ram;
 use crate::system::VDP;
+use crate::system::PSG;
 use crate::cpu::Z80;
 use crate::system::Joystick;
 
@@ -69,6 +70,7 @@ pub struct SystemBus {
     bank2_mapper: RomMapper,
 
     pub vdp: VDP,
+    pub psg: PSG,
     pub joystick: Joystick,
 }
 
@@ -85,6 +87,8 @@ impl SystemBus {
             bank2_mapper: RomMapper::new(0x02),
 
             vdp: VDP::new(),
+
+            psg: PSG::new(),
 
             joystick: Joystick::new(),
         }
@@ -179,15 +183,13 @@ impl SystemBus {
             0x3F => {
                 // not implemented
             },
-            // SN76489 PSG
-            0x40 => {
-                // not implemented
-            },
             // SN 76489 data
             0x7E => {
+                self.psg.write(data)
             },
             // SN 76489 data (mirror)
             0x7F => {
+                self.psg.write(data)
             },
             // VDP data
             0xBE => {
