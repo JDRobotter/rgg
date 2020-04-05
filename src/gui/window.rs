@@ -3,7 +3,7 @@ use cgmath;
 use ggez;
 use ggez::graphics::{self, DrawParam, Scale, Color};
 use ggez::{event, Context, GameResult};
-use ggez::event::{KeyCode, KeyMods};
+use ggez::event::{KeyCode, KeyMods, GamepadId, Button};
 use ggez::input::keyboard;
 use ggez::timer;
 
@@ -51,32 +51,57 @@ impl EmulatorWindow {
 
 }
 
-use crate::system::JoystickButton as Button;
+use crate::system::JoystickButton as JoyButton;
 
 impl event::EventHandler for EmulatorWindow {
 
+    fn gamepad_button_down_event(&mut self, _ctx: &mut Context, btn: Button, id: GamepadId) {
+        match btn {
+            Button::DPadUp => self.gg.set_button_state(JoyButton::Up, true),
+            Button::DPadDown => self.gg.set_button_state(JoyButton::Down, true),
+            Button::DPadLeft => self.gg.set_button_state(JoyButton::Left, true),
+            Button::DPadRight => self.gg.set_button_state(JoyButton::Right, true),
+            Button::Start => self.gg.set_button_state(JoyButton::Start, true),
+            Button::South => self.gg.set_button_state(JoyButton::A, true),
+            Button::East => self.gg.set_button_state(JoyButton::B, true),
+            _ => {},
+        }
+    }
+    fn gamepad_button_up_event(&mut self, _ctx: &mut Context, btn: Button, id: GamepadId) {
+        match btn {
+            Button::DPadUp => self.gg.set_button_state(JoyButton::Up, false),
+            Button::DPadDown => self.gg.set_button_state(JoyButton::Down, false),
+            Button::DPadLeft => self.gg.set_button_state(JoyButton::Left, false),
+            Button::DPadRight => self.gg.set_button_state(JoyButton::Right, false),
+            Button::Start => self.gg.set_button_state(JoyButton::Start, false),
+            Button::South => self.gg.set_button_state(JoyButton::A, false),
+            Button::East => self.gg.set_button_state(JoyButton::B, false),
+            _ => {},
+        }
+    }
+
     fn key_up_event(&mut self, _ctx: &mut Context, kc: KeyCode, km: KeyMods) {
         match kc {
-            KeyCode::Up => self.gg.set_button_state(Button::Up, false),
-            KeyCode::Down => self.gg.set_button_state(Button::Down, false),
-            KeyCode::Left => self.gg.set_button_state(Button::Left, false),
-            KeyCode::Right => self.gg.set_button_state(Button::Right, false),
-            KeyCode::Y => self.gg.set_button_state(Button::Start, false),
-            KeyCode::U => self.gg.set_button_state(Button::A, false),
-            KeyCode::J => self.gg.set_button_state(Button::B, false),
+            KeyCode::Up => self.gg.set_button_state(JoyButton::Up, false),
+            KeyCode::Down => self.gg.set_button_state(JoyButton::Down, false),
+            KeyCode::Left => self.gg.set_button_state(JoyButton::Left, false),
+            KeyCode::Right => self.gg.set_button_state(JoyButton::Right, false),
+            KeyCode::Y => self.gg.set_button_state(JoyButton::Start, false),
+            KeyCode::U => self.gg.set_button_state(JoyButton::A, false),
+            KeyCode::J => self.gg.set_button_state(JoyButton::B, false),
             _ => {},
         }
     }
 
     fn key_down_event(&mut self, _ctx: &mut Context, kc: KeyCode, km: KeyMods, repeat:bool) {
         match kc {
-            KeyCode::Up => self.gg.set_button_state(Button::Up, true),
-            KeyCode::Down => self.gg.set_button_state(Button::Down, true),
-            KeyCode::Left => self.gg.set_button_state(Button::Left, true),
-            KeyCode::Right => self.gg.set_button_state(Button::Right, true),
-            KeyCode::Y => self.gg.set_button_state(Button::Start, true),
-            KeyCode::U => self.gg.set_button_state(Button::A, true),
-            KeyCode::J => self.gg.set_button_state(Button::B, true),
+            KeyCode::Up => self.gg.set_button_state(JoyButton::Up, true),
+            KeyCode::Down => self.gg.set_button_state(JoyButton::Down, true),
+            KeyCode::Left => self.gg.set_button_state(JoyButton::Left, true),
+            KeyCode::Right => self.gg.set_button_state(JoyButton::Right, true),
+            KeyCode::Y => self.gg.set_button_state(JoyButton::Start, true),
+            KeyCode::U => self.gg.set_button_state(JoyButton::A, true),
+            KeyCode::J => self.gg.set_button_state(JoyButton::B, true),
 
             KeyCode::Space => { self.running = !self.running },
             KeyCode::S => { self.run_one = true },
@@ -124,8 +149,8 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw GG LCD screen --
         // draw border
-        let sw = 256.0*2.0;
-        let sh = 224.0*2.0;
+        let sw = 160.0*4.0;
+        let sh = 144.0*4.0;
         let r = graphics::Rect::new(20.0, 20.0, sw+2.0, sh+2.0);
         let rlcd = graphics::Mesh::new_rectangle(ctx,
                                     graphics::DrawMode::stroke(2.0),
@@ -137,12 +162,14 @@ impl event::EventHandler for EmulatorWindow {
         
         self.gg.cpu.bus.vdp.render();
 
-        let mut rgba: [u8;256*224*4] = [0;256*224*4];
-        for y in 0..224 {
-            for x in 0..256 {
-                let color = self.gg.cpu.bus.vdp.screen_get_pixel(x,y);
+        let mut rgba: [u8;160*144*4] = [0;160*144*4];
+        for y in 0..144 {
+            for x in 0..160 {
 
-                let p = y*256 + x;
+                // usable LCD screen is positionned at (48,24) in rendered area
+                let color = self.gg.cpu.bus.vdp.screen_get_pixel(x + 48, y + 24);
+
+                let p = y*160 + x;
                 rgba[4*p + 0] = color.red();
                 rgba[4*p + 1] = color.green();
                 rgba[4*p + 2] = color.blue();
@@ -150,11 +177,11 @@ impl event::EventHandler for EmulatorWindow {
             }
         }
 
-        let im = graphics::Image::from_rgba8(ctx, 256, 224, &rgba)?;
+        let im = graphics::Image::from_rgba8(ctx, 160, 144, &rgba)?;
         graphics::draw(ctx, &im, 
             graphics::DrawParam::new()
                 .dest(cgmath::Point2::new(21.0, 21.0))
-                .scale(cgmath::Vector2::new(2.0, 2.0)))?;
+                .scale(cgmath::Vector2::new(4.0, 4.0)))?;
 
         // -- draw VDP tiles pattern numbers overlay --
         for y in 0..28 {
