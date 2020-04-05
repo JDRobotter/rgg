@@ -1439,8 +1439,6 @@ impl Z80 {
                 // INC ss   p.198
                 // ...
                 self.increment16(op, 1);
-                // add/sub 
-                self.registers.flags.set(ZSF::N, false);
 
                 // T-states
                 match op {

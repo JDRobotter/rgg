@@ -40,6 +40,7 @@ impl GameGear {
         //cpu.set_breakpoint(0x27e);
         //cpu.set_breakpoint(0x2b03);
         //cpu.set_breakpoint(0x33d5);
+        //cpu.set_breakpoint(0x2FB4);
 
         GameGear {
             cpu: cpu,

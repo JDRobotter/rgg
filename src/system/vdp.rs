@@ -504,13 +504,14 @@ impl VDP {
         let spsz = self.get_sprite_size();
 
         // -- render sprites --
-        for sidx in 0..32 {
+        for sidx in 0..64 {
 
             // read sprite information and pattern from table
             let sp = self.get_sprite(sidx);
  
             let sx = sp.x as isize;
             let sy = sp.y as isize;
+
             match sx {
                 0xd0 => {
                     // at a vertical pos., 0xd0 has the meaning of an end code
