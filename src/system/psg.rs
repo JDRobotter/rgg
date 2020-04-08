@@ -1,13 +1,28 @@
 
 use crate::audio::AudioSynth;
 
+use std::option;
 use std::thread;
+
+#[derive(Clone,Copy)]
+struct ToneGeneratorRegister {
+    divider: u16,
+    attenuation :u8,
+}
+
+enum RegisterAddress {
+    Divider(u8),
+    Attenuation(u8),
+    None
+}
 
 /// Sega Game Gear PSG chip
 /// https://www.smspower.org/uploads/Development/SN76489-20030421.txt
 pub struct PSG {
     audio_synth: AudioSynth,
-    latched_byte: u8,
+
+    latched_tone_generator_registers: [ToneGeneratorRegister; 4],
+    last_written_register: RegisterAddress,
 }
 
 impl PSG {
@@ -16,7 +31,8 @@ impl PSG {
 
         PSG {
             audio_synth: AudioSynth::new(),
-            latched_byte: 0,
+            latched_tone_generator_registers: [ToneGeneratorRegister {divider:0, attenuation:0}; 4],
+            last_written_register: RegisterAddress::None,
         }
     }
 
@@ -29,7 +45,7 @@ impl PSG {
         f as f64
     }
 
-    fn amplitude_from_attenuation(a:u16) -> f64 {
+    fn amplitude_from_attenuation(a:u8) -> f64 {
 
         // attenuation in db
         let att_db = 0.2 * a as f64;
@@ -37,53 +53,13 @@ impl PSG {
         32767.0 * (10.0f64).powf(-att_db)
     }
 
-    pub fn execute_command(&mut self, addr: u8, data: u16) {
-        match addr {
-            0x00 => {
-                // tone 1 frequency
-                self.audio_synth.set_tone_active(0, data != 0);
-                self.audio_synth.set_tone_frequency(0, PSG::frequency_from_divider(data));
-            },
-            
-            0x01 => {
-                // tone 1 attenuation
-                self.audio_synth.set_tone_frequency(0, PSG::amplitude_from_attenuation(data));
-            },
-
-            0x02 => {
-                // tone 2 frequency
-                self.audio_synth.set_tone_active(1, data != 0);
-                self.audio_synth.set_tone_frequency(1, PSG::frequency_from_divider(data));
-            },
-
-            0x03 => {
-                // tone 2 attenuation
-                self.audio_synth.set_tone_frequency(1, PSG::amplitude_from_attenuation(data));
-            },
-
-            0x04 => {
-                // tone 3 frequency
-                self.audio_synth.set_tone_active(2, data != 0);
-                self.audio_synth.set_tone_frequency(2, PSG::frequency_from_divider(data));
-            },
-
-            0x05 => {
-                // tone 3 attenuation
-                self.audio_synth.set_tone_frequency(2, PSG::amplitude_from_attenuation(data));
-            },
-
-            0x07 => {
-                // ??
-            },
-
-            _ => { panic!("unknown register address: {:02x}", addr); },
-        }
-    }
-
     pub fn write(&mut self, byte: u8) {
 
         // first byte (latched)
-        // 1  R2 R1 R0 F3 F2 F1 F0
+        // 1  R1 R0 T  F3 F2 F1 F0
+        //
+        // R1R0 : register address
+        // T : 1: volume / 0: tone
         //
         // second byte
         // 0  x  F9 F8 F7 F6 F5 F4a
@@ -91,19 +67,54 @@ impl PSG {
         // R : register address
         // F : data
 
+
         if byte & 0x80 != 0 {
-            // this byte is latched
-            self.latched_byte = byte;
+
+            // register address
+            let ra = (byte >> 5) & 0x03;
+            // volume / tone selector
+            let t = byte & 0x10 != 0;
+            if t {
+                // attenuation
+                self.latched_tone_generator_registers[ra as usize].attenuation = byte & 0x0f;
+                self.last_written_register = RegisterAddress::Attenuation(ra);
+            }
+            else {
+                // tone divider
+                self.latched_tone_generator_registers[ra as usize].divider = (byte & 0x0f) as u16;
+                self.last_written_register = RegisterAddress::Divider(ra);
+            }
 
         }
         else {
 
-            let lbyte = self.latched_byte;
-            let addr = (lbyte >> 4) & 0x07;
-            let data = (lbyte       & 0x0f) as u16
-                     | (((byte & 0x3f) as u16) << 4);
-            
-            self.execute_command(addr, data);
+            // complement latched register
+            match self.last_written_register {
+
+                RegisterAddress::Divider(ri) => {
+                    let div = &mut self.latched_tone_generator_registers[ri as usize].divider;
+                    
+                    *div = (*div & 0x0f) | ((byte & 0x3f) as u16) << 4;
+                },
+
+                RegisterAddress::Attenuation(ri) => {
+                    self.latched_tone_generator_registers[ri as usize].attenuation = byte & 0x0f;
+                },
+
+                RegisterAddress::None => { },
+            }
+
+            // apply latched registers
+            for ri in 0..3 {
+                let att = self.latched_tone_generator_registers[ri].attenuation;
+                let div = self.latched_tone_generator_registers[ri].divider;
+                self.audio_synth.set_tone_active(ri, div != 0);
+                self.audio_synth.set_tone_frequency(ri, PSG::frequency_from_divider(div));
+                self.audio_synth.set_tone_amplitude(ri, PSG::amplitude_from_attenuation(att));
+            }
+
+ 
+
         }
     }
 

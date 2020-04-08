@@ -52,6 +52,7 @@ impl AudioSynthParameters {
     }
     
     fn square(x:f64) -> f64 {
+        /*
         let mx = x % 1.0;
         if mx > 0.5 {
             1.0
@@ -59,6 +60,18 @@ impl AudioSynthParameters {
         else {
             -1.0
         }
+        */
+
+        // use square function Fourier expansion to "soften" the sound
+        const N: usize = 15;
+        let mut y = 0.0;
+        for k in 0..N {
+            const TWO_PI:f64 = 2.0*std::f64::consts::PI;
+            let a = 2.0*(k as f64) - 1.0;
+            y += (TWO_PI * a * x).sin() / a;
+        }
+
+        (4.0*y) / std::f64::consts::PI
     }
 
     fn next_sample(&mut self) -> i16 {
@@ -79,6 +92,9 @@ impl AudioSynthParameters {
                 sample += y;
             }
         }
+
+        // general gain
+        sample *= 0.2;
 
         sample as i16
     }

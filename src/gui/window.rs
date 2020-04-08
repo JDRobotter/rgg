@@ -43,7 +43,7 @@ impl EmulatorWindow {
         Ok(EmulatorWindow {
             gg: gg,
             font:font,
-            running: false,
+            running: true,
             run_one: false,
             ram_watchers: watchers,
         })
