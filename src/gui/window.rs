@@ -145,7 +145,7 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- start drawing --
         //
-        graphics::clear(ctx, graphics::BLACK);
+        graphics::clear(ctx, Color::new(0.1,0.1,0.1,1.0));
 
         // -- draw GG LCD screen --
         // draw border
@@ -355,6 +355,26 @@ impl event::EventHandler for EmulatorWindow {
                                     r,
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
+
+
+        // -- draw PSG statuses --
+        //
+        let bx = sw + 40.0;
+        let by = 490.0;
+        for i in 0..3 {
+            let f_hz = self.gg.cpu.bus.psg.debug_get_tone_frequency(i);
+            let amp = self.gg.cpu.bus.psg.debug_get_tone_amplitude(i);
+            let amp = amp / 327.670;
+            let text = graphics::Text::new((
+                    format!("{} {:8.1} {:4.0}",i,f_hz,amp),
+                    self.font,
+                    16.0));
+            let y = by + (i as f32) * 12.0;
+            let xy = cgmath::Point2::new(bx, y);
+            graphics::draw(ctx, &text, (xy,))?;
+        }
+
+
 
         graphics::present(ctx)
     }

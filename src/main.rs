@@ -6,7 +6,7 @@ use ggez::conf::{WindowMode, WindowSetup, NumSamples, FullscreenType};
 use ggez::event::{self, EventHandler};
 
 extern crate clap;
-use clap::{App};
+use clap::{Arg, App};
 
 use std::io;
 use std::env;
@@ -20,19 +20,21 @@ mod bits;
 mod audio;
 
 fn main() -> GameResult {
-    let _matches = App::new("RGG emulator")
+    let matches = App::new("RGG emulator")
                     .about("A Game Gear emulator")
+                    .arg(Arg::with_name("rom")
+                            .help("ROM file to run")
+                            .required(true)
+                            .index(1))
                     .get_matches();
 
+
     println!("[+] Starting RGG");
+    
+    let rom_filename = matches.value_of("rom").expect("rom filename is mandatory");
+    println!("[+] loading {}", rom_filename);
 
-    //let rom = memory::Rom::open("test/test.gg")?;
-    let rom = memory::Rom::open("roms/Sonic The Hedgehog (World) (Rev 1).gg")?;
-    //let rom = memory::Rom::open("roms/Columns (USA, Europe).gg")?;
-    //let rom = memory::Rom::open("roms/Asterix and the Great Rescue (Europe) (En,Fr,De,Es,It).gg")?;
-    //let rom = memory::Rom::open("roms/Fantasy Zone (Japan, Europe).gg")?;
-    //let rom = memory::Rom::open("roms/senna.gg")?;
-
+    let rom = memory::Rom::open(rom_filename)?;
     println!("[+] loaded ROM is {} bytes", rom.size());
  
 

@@ -735,6 +735,18 @@ impl Z80 {
                 4 // T-states
             },
 
+            ZI::Halt => {
+                // HALT     p.173
+                
+                // Suspends CPU operation unitl a subsequent interrupt or reset is received
+                
+                // HACK
+                self.registers.pc -= 1;
+                // HACK
+                
+                4 // T-states
+            },
+
             ZI::DisableInt => {
                 // DI p.182
                 self.interrupt_enabled = false;

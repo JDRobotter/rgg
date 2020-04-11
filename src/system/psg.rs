@@ -7,7 +7,14 @@ use std::thread;
 #[derive(Clone,Copy)]
 struct ToneGeneratorRegister {
     divider: u16,
-    attenuation :u8,
+    attenuation: u8,
+}
+
+#[derive(Clone,Copy)]
+struct NoiseGeneratorRegister {
+    attenuation: u8,
+    sync: bool,
+    divider: u8,
 }
 
 enum RegisterAddress {
@@ -21,7 +28,8 @@ enum RegisterAddress {
 pub struct PSG {
     audio_synth: AudioSynth,
 
-    latched_tone_generator_registers: [ToneGeneratorRegister; 4],
+    latched_tone_generator_registers: [ToneGeneratorRegister; 3],
+    latched_noise_generator_register: NoiseGeneratorRegister,
     last_written_register: RegisterAddress,
 }
 
@@ -31,9 +39,18 @@ impl PSG {
 
         PSG {
             audio_synth: AudioSynth::new(),
-            latched_tone_generator_registers: [ToneGeneratorRegister {divider:0, attenuation:0}; 4],
+            latched_tone_generator_registers: [ToneGeneratorRegister {divider:0, attenuation:0}; 3],
+            latched_noise_generator_register: NoiseGeneratorRegister {attenuation:0, sync:false, divider:0},
             last_written_register: RegisterAddress::None,
         }
+    }
+
+    pub fn debug_get_tone_amplitude(&mut self, n:usize) -> f64 {
+        self.audio_synth.get_tone_amplitude(n)
+    }
+
+    pub fn debug_get_tone_frequency(&mut self, n:usize) -> f64 {
+        self.audio_synth.get_tone_frequency(n)
     }
 
     fn frequency_from_divider(div:u16) -> f64 {
@@ -47,10 +64,15 @@ impl PSG {
 
     fn amplitude_from_attenuation(a:u8) -> f64 {
 
-        // attenuation in db
-        let att_db = 0.2 * a as f64;
-
-        32767.0 * (10.0f64).powf(-att_db)
+        if a == 0x0f {
+            // $F is a special case where tone generator is OFF
+            0.0
+        }
+        else {
+            // attenuation in db
+            let att_db = 2.0 * a as f64;
+            32767.0 * (10.0f64).powf(-0.1*att_db)
+        }
     }
 
     pub fn write(&mut self, byte: u8) {
@@ -74,15 +96,30 @@ impl PSG {
             let ra = (byte >> 5) & 0x03;
             // volume / tone selector
             let t = byte & 0x10 != 0;
-            if t {
-                // attenuation
-                self.latched_tone_generator_registers[ra as usize].attenuation = byte & 0x0f;
-                self.last_written_register = RegisterAddress::Attenuation(ra);
+            if ra == 3 {
+                // noise register
+                if t {
+                    // attenuation
+                    self.latched_noise_generator_register.attenuation = byte & 0x0f;
+                }
+                else {
+                    // shift
+                    self.latched_noise_generator_register.sync = (byte & 0x04) == 0;
+                    self.latched_noise_generator_register.divider = byte & 0x03;
+                }
             }
             else {
-                // tone divider
-                self.latched_tone_generator_registers[ra as usize].divider = (byte & 0x0f) as u16;
-                self.last_written_register = RegisterAddress::Divider(ra);
+                // tone registers
+                if t {
+                    // attenuation
+                    self.latched_tone_generator_registers[ra as usize].attenuation = byte & 0x0f;
+                    self.last_written_register = RegisterAddress::Attenuation(ra);
+                }
+                else {
+                    // tone divider
+                    self.latched_tone_generator_registers[ra as usize].divider = (byte & 0x0f) as u16;
+                    self.last_written_register = RegisterAddress::Divider(ra);
+                }
             }
 
         }
@@ -104,7 +141,7 @@ impl PSG {
                 RegisterAddress::None => { },
             }
 
-            // apply latched registers
+            // apply latched tone registers
             for ri in 0..3 {
                 let att = self.latched_tone_generator_registers[ri].attenuation;
                 let div = self.latched_tone_generator_registers[ri].divider;
@@ -112,6 +149,8 @@ impl PSG {
                 self.audio_synth.set_tone_frequency(ri, PSG::frequency_from_divider(div));
                 self.audio_synth.set_tone_amplitude(ri, PSG::amplitude_from_attenuation(att));
             }
+
+            // apply latched noise registers
 
  
 

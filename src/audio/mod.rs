@@ -17,7 +17,20 @@ impl ToneGeneratorParameters {
         ToneGeneratorParameters {
             active: false,
             frequency: 0.0,
-            amplitude: 1000.0,
+            amplitude: 0.0,
+        }
+    }
+}
+
+#[derive(Copy,Clone)]
+struct NoiseGeneratorParameters {
+    amplitude: f64,
+}
+
+impl NoiseGeneratorParameters {
+    fn new() -> NoiseGeneratorParameters {
+        NoiseGeneratorParameters {
+            amplitude: 0.0,
         }
     }
 }
@@ -27,6 +40,8 @@ struct AudioSynthParameters {
     sample_time: f64,
 
     tone_generators: [ToneGeneratorParameters; 3],
+
+    noise_generator: NoiseGeneratorParameters,
 }
 
 impl AudioSynthParameters {
@@ -36,6 +51,8 @@ impl AudioSynthParameters {
             sample_time: 0.0,
 
             tone_generators: [ToneGeneratorParameters::new(); 3],
+            
+            noise_generator: NoiseGeneratorParameters::new(),
         }
     }
 
@@ -47,10 +64,26 @@ impl AudioSynthParameters {
         self.tone_generators[n].frequency = f;
     }
 
+    pub fn get_tone_frequency(&self, n:usize) -> f64 {
+        self.tone_generators[n].frequency
+    }
+
     pub fn set_tone_amplitude(&mut self, n:usize, a:f64) {
         self.tone_generators[n].amplitude = a;
     }
-    
+ 
+    pub fn get_tone_amplitude(&self, n:usize) -> f64 {
+        self.tone_generators[n].amplitude
+    }
+
+    pub fn set_noise_amplitude(&mut self, a:f64) {
+        self.noise_generator.amplitude = a;
+    }
+ 
+    pub fn get_noise_amplitude(&self) -> f64 {
+        self.noise_generator.amplitude
+    }
+
     fn square(x:f64) -> f64 {
         /*
         let mx = x % 1.0;
@@ -93,8 +126,8 @@ impl AudioSynthParameters {
             }
         }
 
-        // general gain
-        sample *= 0.2;
+        // XXX HACK general gain
+        sample *= 0.1;
 
         sample as i16
     }
@@ -153,10 +186,50 @@ impl AudioSynth {
         asp.set_tone_frequency(n,f);
     }
 
+    pub fn get_tone_frequency(&mut self, n:usize) -> f64 {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.get_tone_frequency(n)
+    }
+
     pub fn set_tone_amplitude(&mut self, n:usize, a:f64) {
         let mut asp = self.parameters.lock().unwrap();
         asp.set_tone_amplitude(n,a);
     }
+
+    pub fn get_tone_amplitude(&mut self, n:usize) -> f64 {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.get_tone_amplitude(n)
+    }
+
+    pub fn set_noise_synchronous(&mut self, b:bool) {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.set_noise_synchronous(b);
+    }   
+
+    pub fn get_noise_synchronous(&mut self) -> bool {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.get_noise_synchronous()
+    } 
+
+    pub fn set_noise_frequency(&mut self, f:f64) {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.set_noise_frequency(f);
+    }   
+
+    pub fn get_noise_frequency(&mut self) -> f64 {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.get_noise_frequency()
+    } 
+
+    pub fn set_noise_amplitude(&mut self, a:f64) {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.set_noise_amplitude(a);
+    }   
+
+    pub fn get_noise_amplitude(&mut self) -> f64 {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.get_noise_amplitude()
+    } 
 
     fn evloop(stream_id:StreamId, stream_result:StreamDataResult, parameters: &mut AudioSynthParameters) {
 
