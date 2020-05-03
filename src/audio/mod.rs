@@ -126,8 +126,8 @@ impl AudioSynthParameters {
             }
         }
 
-        // XXX HACK general gain
-        sample *= 0.1;
+        // general gain
+        sample *= 0.05;
 
         sample as i16
     }

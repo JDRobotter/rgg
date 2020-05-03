@@ -216,6 +216,7 @@ impl event::EventHandler for EmulatorWindow {
         graphics::draw(ctx, &text, (xy,))?;
 
         // -- draw watchers values --
+        /*
         for (idx,rw) in self.ram_watchers.iter().enumerate() {
             
             let b8 = self.gg.cpu.bus.cpu_read(rw.addr);
@@ -231,6 +232,7 @@ impl event::EventHandler for EmulatorWindow {
             let xy = cgmath::Point2::new(sw + 20.0, sh + 40.0 + mf*18.0);
             graphics::draw(ctx, &text, (xy,))?;
         }
+        */
         
         // -- draw GG VDP palettes --
         //
@@ -356,7 +358,6 @@ impl event::EventHandler for EmulatorWindow {
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
-
         // -- draw PSG statuses --
         //
         let bx = sw + 40.0;
@@ -374,7 +375,32 @@ impl event::EventHandler for EmulatorWindow {
             graphics::draw(ctx, &text, (xy,))?;
         }
 
+        // -- draw RAM --
+        let bx = sw + 40.0;
+        let by = 500.0;
+        let mut rgba: [u8;91*91*4] = [0;91*91*4];
+        for y in 0..91 {
+            for x in 0..91 {
 
+                let addr:usize  = y*91 + x;
+                let byte = if addr < 8192 {
+                    self.gg.cpu.bus.work_ram.read(addr as u16)
+                }
+                else {
+                    0
+                };
+                rgba[4*addr + 0] = byte;
+                rgba[4*addr + 1] = byte;
+                rgba[4*addr + 2] = byte;
+                rgba[4*addr + 3] = 0xff;
+            }
+        }
+
+        let im = graphics::Image::from_rgba8(ctx, 91, 91, &rgba)?;
+        graphics::draw(ctx, &im,
+            graphics::DrawParam::new()
+                .dest(cgmath::Point2::new(bx,by))
+                .scale(cgmath::Vector2::new(2.0,2.0)))?;
 
         graphics::present(ctx)
     }

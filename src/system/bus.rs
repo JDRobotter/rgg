@@ -63,7 +63,7 @@ impl RomMapper {
 pub struct SystemBus {
     
     rom: Rom,
-    work_ram: Ram,
+    pub work_ram: Ram,
 
     bank0_mapper: RomMapper,
     bank1_mapper: RomMapper,
