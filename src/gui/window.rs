@@ -360,8 +360,8 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw PSG statuses --
         //
-        let bx = sw + 40.0;
-        let by = 490.0;
+        let bx = 450.0;
+        let by = sh + 40.0;
         for i in 0..3 {
             let f_hz = self.gg.cpu.bus.psg.debug_get_tone_frequency(i);
             let amp = self.gg.cpu.bus.psg.debug_get_tone_amplitude(i);

@@ -5,6 +5,54 @@ use cpal::{StreamId,StreamDataResult,SampleRate,SampleFormat,Format,StreamData,U
 use std::sync::{Mutex,Arc};
 use std::thread;
 
+struct LFSR {
+    register: u16,
+    state: bool,
+    output: f64,
+}
+
+impl LFSR {
+    fn new() -> LFSR {
+        LFSR {
+            register: 0,
+            state: false,
+            output: 0.0,
+        }
+    }
+
+    fn parity(inr:u16) -> bool {
+        let a = inr & 0x0001 != 0;
+        let b = inr & 0x0008 != 0;
+        return (a && b) || (!a && !b);
+    }
+
+    fn shift(&mut self) {
+        // apply feedback on register
+        self.register = self.register >> 1;
+        if LFSR::parity(self.register) {
+            self.register |= 0x8000;
+        }
+        self.output = if self.register & 0x0001 != 0x0000 { 1.0 } else { 0.0 };
+    }
+
+    fn update(&mut self, x:f64) -> f64 {
+        let mut sample = 0.0f64;
+        if x > 0.5 {
+            if self.state == false {
+                // on rising edge
+                self.shift();
+
+                self.state = true;
+            }
+        }
+        else {
+            self.state = false;
+        }
+
+        self.output
+    }
+}
+
 #[derive(Copy,Clone)]
 struct ToneGeneratorParameters {
     active: bool,
@@ -25,12 +73,18 @@ impl ToneGeneratorParameters {
 #[derive(Copy,Clone)]
 struct NoiseGeneratorParameters {
     amplitude: f64,
+    coupled: bool,
+    frequency: f64,
+    feedback: bool,
 }
 
 impl NoiseGeneratorParameters {
     fn new() -> NoiseGeneratorParameters {
         NoiseGeneratorParameters {
             amplitude: 0.0,
+            coupled: false,
+            frequency: 0.0,
+            feedback: false,
         }
     }
 }
@@ -42,6 +96,7 @@ struct AudioSynthParameters {
     tone_generators: [ToneGeneratorParameters; 3],
 
     noise_generator: NoiseGeneratorParameters,
+    noise_lfsr: LFSR,
 }
 
 impl AudioSynthParameters {
@@ -53,6 +108,7 @@ impl AudioSynthParameters {
             tone_generators: [ToneGeneratorParameters::new(); 3],
             
             noise_generator: NoiseGeneratorParameters::new(),
+            noise_lfsr: LFSR::new(),
         }
     }
 
@@ -82,6 +138,23 @@ impl AudioSynthParameters {
  
     pub fn get_noise_amplitude(&self) -> f64 {
         self.noise_generator.amplitude
+    }
+
+    pub fn set_noise_feedback(&mut self, b:bool) {
+        self.noise_generator.feedback = b
+    }
+
+    pub fn get_noise_feedback(&self) -> bool {
+        self.noise_generator.feedback
+    }
+
+    pub fn set_noise_frequency(&mut self, b:bool, f:f64) {
+        self.noise_generator.frequency = f;
+        self.noise_generator.coupled = b;
+    }
+
+    pub fn get_noise_frequency(&self) -> f64 {
+        self.noise_generator.frequency
     }
 
     fn square(x:f64) -> f64 {
@@ -120,11 +193,22 @@ impl AudioSynthParameters {
             
             if tgp.active {
                 let x = tgp.frequency * self.sample_time;
-                let y = tgp.amplitude*AudioSynthParameters::square(x);
+                let y = tgp.amplitude * AudioSynthParameters::square(x);
 
                 sample += y;
             }
         }
+
+        // noise generator
+        let nf = if self.noise_generator.coupled {
+            self.tone_generators[2].frequency
+        }
+        else {
+            self.noise_generator.frequency
+        };
+        let x = nf * self.sample_time;
+        let ny = self.noise_generator.amplitude * self.noise_lfsr.update(x % 1.0);
+        sample += ny;
 
         // general gain
         sample *= 0.05;
@@ -201,19 +285,19 @@ impl AudioSynth {
         asp.get_tone_amplitude(n)
     }
 
-    pub fn set_noise_synchronous(&mut self, b:bool) {
+    pub fn set_noise_feedback(&mut self, b:bool) {
         let mut asp = self.parameters.lock().unwrap();
-        asp.set_noise_synchronous(b);
+        asp.set_noise_feedback(b);
     }   
 
-    pub fn get_noise_synchronous(&mut self) -> bool {
+    pub fn get_noise_feedback(&mut self) -> bool {
         let mut asp = self.parameters.lock().unwrap();
-        asp.get_noise_synchronous()
+        asp.get_noise_feedback()
     } 
 
-    pub fn set_noise_frequency(&mut self, f:f64) {
+    pub fn set_noise_frequency(&mut self, coupled:bool, f:f64) {
         let mut asp = self.parameters.lock().unwrap();
-        asp.set_noise_frequency(f);
+        asp.set_noise_frequency(coupled,f);
     }   
 
     pub fn get_noise_frequency(&mut self) -> f64 {
