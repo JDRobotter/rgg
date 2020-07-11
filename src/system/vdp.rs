@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::bits::Bits;
 
 bitflags! {
@@ -69,8 +71,8 @@ bitflags! {
 }
 
 enum SpriteSize {
-    SIZE_8x8,
-    SIZE_8x16,
+    Size8x8,
+    Size8x16,
 }
 
 /// Background tile table entry
@@ -346,8 +348,8 @@ impl VDP {
             VDPRegisterModeControl2::from_bits_truncate(self.registers[1])
                                         .contains(VDPRegisterModeControl2::SIZE);
         match bsize {
-            false => SpriteSize::SIZE_8x8,
-            true => SpriteSize::SIZE_8x16,
+            false => SpriteSize::Size8x8,
+            true => SpriteSize::Size8x16,
         }
     }
 
@@ -527,13 +529,13 @@ impl VDP {
             };
 
             match spsz {
-                SpriteSize::SIZE_8x8 => {
+                SpriteSize::Size8x8 => {
                     // fetch pattern
                     let pattern = self.get_sprite_pattern(sp.n);
                     // blit sprite pattern to screen
                     self.blit_to_screen(sx,sy,pattern);
                 },
-                SpriteSize::SIZE_8x16 => {
+                SpriteSize::Size8x16 => {
                     // from Sega GG HW ref. man. (rev1) p.32
                     
                     // compute masked pattern number

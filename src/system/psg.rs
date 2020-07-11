@@ -1,9 +1,6 @@
 
 use crate::audio::AudioSynth;
 
-use std::option;
-use std::thread;
-
 #[derive(Clone,Copy)]
 struct ToneGeneratorRegister {
     divider: u16,
@@ -175,12 +172,12 @@ impl PSG {
 
             // apply latched noise registers
             let att = self.latched_noise_generator_register.attenuation;
-            let f = match self.latched_noise_generator_register.divider {
-                _ =>    { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(16)) },
+            match self.latched_noise_generator_register.divider {
                 0x01 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(32)) },
                 0x02 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(64)) },
                 // link to tone generator 3
                 0x03 => { self.audio_synth.set_noise_frequency(true, 0.0) },
+                _ =>    { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(16)) },
             };
             let fb = self.latched_noise_generator_register.feedback;
             self.audio_synth.set_noise_amplitude(PSG::amplitude_from_attenuation(att));

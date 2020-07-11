@@ -3,11 +3,7 @@ use crate::memory::Rom;
 use crate::memory::Ram;
 use crate::system::VDP;
 use crate::system::PSG;
-use crate::cpu::Z80;
 use crate::system::Joystick;
-
-use std::rc::Rc;
-use std::cell::{RefCell,RefMut};
 
 bitflags! {
     struct BankControlRegister: u8 {
@@ -235,12 +231,9 @@ impl SystemBus {
             // work RAM
             self.work_ram.read(addr - 0xc000)
         }
-        else if addr <= 0xffff {
+        else /* if addr <= 0xffff */ { 
             // work RAM, mirrored
             self.work_ram.read(addr - 0xe000)
-        }
-        else {
-            panic!("CPU read defaulting for {:04x}", addr);
         }
     }
 
@@ -267,7 +260,7 @@ impl SystemBus {
             self.work_ram.write(addr - 0xe000, data);
 
             // RAM mapping and misc functions
-            let flags = BankControlRegister::from_bits_truncate(data);
+            let _flags = BankControlRegister::from_bits_truncate(data);
             // mapper control flags are not implemented
             if data & 0x7F != 0x00 {
                 panic!("Unhandled mapper control: {:02x}", data);

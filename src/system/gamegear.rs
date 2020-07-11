@@ -1,12 +1,8 @@
 use crate::cpu::Z80;
 use crate::memory::Rom;
-use crate::system::VDP;
 use crate::system::JoystickButton;
 
 use std::collections::VecDeque;
-
-use std::io::prelude::*;
-use std::fs::File;
 
 pub struct GameGear {
  
@@ -26,7 +22,7 @@ impl GameGear {
 
     pub fn new(rom: Rom) -> GameGear {
 
-        let mut cpu = Z80::new(rom);
+        let cpu = Z80::new(rom);
 
 /*
         cpu.set_breakpoint(0x2b89);

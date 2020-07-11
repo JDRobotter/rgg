@@ -1,14 +1,13 @@
 #[macro_use]
 extern crate bitflags;
 
-use ggez::{graphics, Context, ContextBuilder, GameResult};
+use ggez::{ContextBuilder, GameResult};
 use ggez::conf::{WindowMode, WindowSetup, NumSamples, FullscreenType};
-use ggez::event::{self, EventHandler};
+use ggez::event::{self};
 
 extern crate clap;
 use clap::{Arg, App};
 
-use std::io;
 use std::env;
 use std::path;
 
@@ -73,7 +72,7 @@ fn main() -> GameResult {
                                         .unwrap();
 
     // instanciate gg emulator
-    let mut gg = system::GameGear::new(rom);
+    let gg = system::GameGear::new(rom);
 
     // instanciate an emulator window
     let mut emu_window = gui::EmulatorWindow::new(&mut ctx, gg)?;

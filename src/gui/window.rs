@@ -1,11 +1,9 @@
 use cgmath;
 
 use ggez;
-use ggez::graphics::{self, DrawParam, Scale, Color};
+use ggez::graphics::{self, DrawParam, Color};
 use ggez::{event, Context, GameResult};
 use ggez::event::{KeyCode, KeyMods, GamepadId, Button};
-use ggez::input::keyboard;
-use ggez::timer;
 
 use crate::system::GameGear;
 
@@ -55,7 +53,7 @@ use crate::system::JoystickButton as JoyButton;
 
 impl event::EventHandler for EmulatorWindow {
 
-    fn gamepad_button_down_event(&mut self, _ctx: &mut Context, btn: Button, id: GamepadId) {
+    fn gamepad_button_down_event(&mut self, _ctx: &mut Context, btn: Button, _id: GamepadId) {
         match btn {
             Button::DPadUp => self.gg.set_button_state(JoyButton::Up, true),
             Button::DPadDown => self.gg.set_button_state(JoyButton::Down, true),
@@ -67,7 +65,7 @@ impl event::EventHandler for EmulatorWindow {
             _ => {},
         }
     }
-    fn gamepad_button_up_event(&mut self, _ctx: &mut Context, btn: Button, id: GamepadId) {
+    fn gamepad_button_up_event(&mut self, _ctx: &mut Context, btn: Button, _id: GamepadId) {
         match btn {
             Button::DPadUp => self.gg.set_button_state(JoyButton::Up, false),
             Button::DPadDown => self.gg.set_button_state(JoyButton::Down, false),
@@ -80,7 +78,7 @@ impl event::EventHandler for EmulatorWindow {
         }
     }
 
-    fn key_up_event(&mut self, _ctx: &mut Context, kc: KeyCode, km: KeyMods) {
+    fn key_up_event(&mut self, _ctx: &mut Context, kc: KeyCode, _km: KeyMods) {
         match kc {
             KeyCode::Up => self.gg.set_button_state(JoyButton::Up, false),
             KeyCode::Down => self.gg.set_button_state(JoyButton::Down, false),
@@ -93,7 +91,7 @@ impl event::EventHandler for EmulatorWindow {
         }
     }
 
-    fn key_down_event(&mut self, _ctx: &mut Context, kc: KeyCode, km: KeyMods, repeat:bool) {
+    fn key_down_event(&mut self, _ctx: &mut Context, kc: KeyCode, _km: KeyMods, _repeat:bool) {
         match kc {
             KeyCode::Up => self.gg.set_button_state(JoyButton::Up, true),
             KeyCode::Down => self.gg.set_button_state(JoyButton::Down, true),
@@ -110,13 +108,11 @@ impl event::EventHandler for EmulatorWindow {
         }
     }
 
-    fn update(&mut self, ctx: &mut Context) -> GameResult {
+    fn update(&mut self, _ctx: &mut Context) -> GameResult {
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-
-        const DESIRED_FPS: u32 = 60;
 
         loop {
             if self.running {
@@ -184,20 +180,22 @@ impl event::EventHandler for EmulatorWindow {
                 .scale(cgmath::Vector2::new(4.0, 4.0)))?;
 
         // -- draw VDP tiles pattern numbers overlay --
+        /*
         for y in 0..28 {
             for x in 0..32 {
                 
                 let idx = self.gg.cpu.bus.vdp.debug_get_tile_number(x,y);
-                let mut text = graphics::Text::new(
+                let text = graphics::Text::new(
                     graphics::TextFragment::new(format!("{:0x}",idx))
                         .font(self.font)
                         .color(Color::new(255.0,0.0,255.0,100.0))
                 );
                 let xy = cgmath::Point2::new(21.0 + 2.0*(x as f32)*8.0,
                                                 21.0 + 2.0*(y as f32)*8.0);
-                //graphics::draw(ctx, &text, (xy,))?;
+                graphics::draw(ctx, &text, (xy,))?;
             }
         }
+        */
 
         // -- draw GG instructions --
         for (idx,line) in self.gg.instructions.iter().rev().enumerate() {

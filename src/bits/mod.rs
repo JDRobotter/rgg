@@ -1,5 +1,3 @@
-use std::ops::BitAnd;
-use std::cmp::PartialEq;
 
 pub struct Bits<T> {
     word:T,

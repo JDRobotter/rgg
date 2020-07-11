@@ -14,7 +14,7 @@ impl Ram {
 
     fn check_address_validity(&self, addr:usize) -> bool {
         let sz = self.data.len();
-        (0 <= addr) && (addr < sz)
+        addr < sz
     }
 
     pub fn write(&mut self, addr:u16, byte:u8) {

@@ -1,5 +1,5 @@
 extern crate cpal;
-use cpal::traits::{DeviceTrait,HostTrait,EventLoopTrait};
+use cpal::traits::{HostTrait,EventLoopTrait};
 use cpal::{StreamId,StreamDataResult,SampleRate,SampleFormat,Format,StreamData,UnknownTypeOutputBuffer};
 
 use std::sync::{Mutex,Arc};
@@ -36,7 +36,6 @@ impl LFSR {
     }
 
     fn update(&mut self, x:f64) -> f64 {
-        let mut sample = 0.0f64;
         if x > 0.5 {
             if self.state == false {
                 // on rising edge
@@ -271,7 +270,7 @@ impl AudioSynth {
     }
 
     pub fn get_tone_frequency(&mut self, n:usize) -> f64 {
-        let mut asp = self.parameters.lock().unwrap();
+        let asp = self.parameters.lock().unwrap();
         asp.get_tone_frequency(n)
     }
 
@@ -281,7 +280,7 @@ impl AudioSynth {
     }
 
     pub fn get_tone_amplitude(&mut self, n:usize) -> f64 {
-        let mut asp = self.parameters.lock().unwrap();
+        let asp = self.parameters.lock().unwrap();
         asp.get_tone_amplitude(n)
     }
 
@@ -291,7 +290,7 @@ impl AudioSynth {
     }   
 
     pub fn get_noise_feedback(&mut self) -> bool {
-        let mut asp = self.parameters.lock().unwrap();
+        let asp = self.parameters.lock().unwrap();
         asp.get_noise_feedback()
     } 
 
@@ -301,7 +300,7 @@ impl AudioSynth {
     }   
 
     pub fn get_noise_frequency(&mut self) -> f64 {
-        let mut asp = self.parameters.lock().unwrap();
+        let asp = self.parameters.lock().unwrap();
         asp.get_noise_frequency()
     } 
 
@@ -311,7 +310,7 @@ impl AudioSynth {
     }   
 
     pub fn get_noise_amplitude(&mut self) -> f64 {
-        let mut asp = self.parameters.lock().unwrap();
+        let asp = self.parameters.lock().unwrap();
         asp.get_noise_amplitude()
     } 
 

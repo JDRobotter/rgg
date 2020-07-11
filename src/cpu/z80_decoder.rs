@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 
 #[derive(Copy, Clone, Debug)]
 pub enum Z80InstructionLocation {
@@ -215,7 +216,7 @@ impl Z80Instruction {
             Z80Instruction::JumpImmediate(cond, addr) =>    format!("jp {} {}",cond.to_string(), addr.to_string()),
             Z80Instruction::JumpRelative(cond, v) =>        {
                 // special case to show immediate value as signed displacement
-                match(v) {
+                match v {
                     ZIL::Immediate(e)   => format!("jr {} PC{:+}", cond.to_string(), *e as i8),
                     _                   => format!("jr {} PC+{}", cond.to_string(), v.to_string()),
                 }

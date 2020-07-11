@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 
 use crate::cpu::Z80InstructionDecoder;
 use crate::system::SystemBus;
@@ -12,8 +13,6 @@ use Z80InstructionLocation as ZIL;
 use crate::cpu::Z80JumpCondition;
 use Z80JumpCondition as ZJC;
 
-use std::ops;
-use std::convert::From;
 use std::mem;
 
 use std::time::{Duration, Instant};
@@ -645,7 +644,7 @@ impl Z80 {
         // based on
         // https://stackoverflow.com/questions/8034566/overflow-and-carry-flags-on-z80
  
-        let mut carry_out = false;
+        let mut carry_out;
 
         // 1111 11
         // 5432 1098 7654 3210
@@ -655,12 +654,12 @@ impl Z80 {
         let acc =
             if flags.contains(ZSF::C) {
                 // with carry
-                carry_out = (a >= 0xffff - b);
+                carry_out = a >= 0xffff - b;
                 a + b + 1
             }
             else {
                 // without carry
-                carry_out = (a > 0xffff - b);
+                carry_out = a > 0xffff - b;
                 a + b
         };
     
@@ -688,7 +687,7 @@ impl Z80 {
         // based on
         // https://stackoverflow.com/questions/8034566/overflow-and-carry-flags-on-z80
  
-        let mut carry_out = false;
+        let carry_out;
 
         // half carry is carry from bit 3 to bit 4
         let half_carry_out = ((a & 0x0f) + (b & 0x0f)) & 0x10 != 0;
@@ -696,12 +695,12 @@ impl Z80 {
         let acc =
             if flags.contains(ZSF::C) {
                 // with carry
-                carry_out = (a >= 0xff - b);
+                carry_out = a >= 0xff - b;
                 a + b + 1
             }
             else {
                 // without carry
-                carry_out = (a > 0xff - b);
+                carry_out = a > 0xff - b;
                 a + b
         };
     
@@ -1222,7 +1221,7 @@ impl Z80 {
                 let temp = Z80::add16_with_carry(lhs, rhs, &mut self.registers.flags);
 
                 // assign value to lhs operand
-                let lhs = match oplhs {
+                match oplhs {
                     ZIL::RegisterHL => { self.registers.set_HL(temp) }
                     ZIL::RegisterIX => { self.registers.ix = temp }
                     ZIL::RegisterIY => { self.registers.iy = temp }
@@ -1268,7 +1267,7 @@ impl Z80 {
                 let temp = Z80::add16_with_carry(lhs, rhs, &mut self.registers.flags);
 
                 // assign value to lhs operand
-                let lhs = match oplhs {
+                match oplhs {
                     ZIL::RegisterHL => { self.registers.set_HL(temp) }
                     ZIL::RegisterIX => { self.registers.ix = temp }
                     ZIL::RegisterIY => { self.registers.iy = temp }
@@ -1283,7 +1282,7 @@ impl Z80 {
                 15
             },
 
-            ZI::Sub16Carry(oplhs, oprhs) => {
+            ZI::Sub16Carry(_oplhs, oprhs) => {
                 // SBC HL, ss   p.192
                 
                 // HL <- HL - ss - CY
@@ -1624,7 +1623,7 @@ impl Z80 {
 
                 // set bit b
                 let mut byte = self.read_AND_operand(op);
-                byte |= (1<<b);
+                byte |= 1<<b;
                 self.write_AND_operand(op, byte);
 
                 // no condition bits are affected by this operation
@@ -1951,7 +1950,7 @@ impl Z80 {
                 // execute LDI while BC != 0
                 loop {
                     self.load_increment(1);
-                    if(self.registers.BC() == 0) {
+                    if self.registers.BC() == 0 {
                         states += 16;
                         break;
                     }
@@ -1970,7 +1969,7 @@ impl Z80 {
                 // execute LDR while BC != 0
                 loop {
                     self.load_increment(-1);
-                    if(self.registers.BC() == 0) {
+                    if self.registers.BC() == 0 {
                         states += 16;
                         break;
                     }
@@ -2172,7 +2171,7 @@ impl Z80 {
 
                 loop {
                     self.out_increment();
-                    if(self.registers.b == 0) {
+                    if self.registers.b == 0 {
                         states += 16;
                         break;
                     }
@@ -2181,10 +2180,6 @@ impl Z80 {
 
                 // T-states
                 states
-            },
-
-            _ => {
-                panic!("unhandled instruction: {:?}", ins);
             },
         }
     }
