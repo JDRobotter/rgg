@@ -140,6 +140,7 @@ pub enum Z80Instruction {
     Call(Z80JumpCondition, Z80InstructionLocation),
     DecrementJumpNZ(Z80InstructionLocation),
     Return(Z80JumpCondition),
+    ReturnInterrupt,
 
     // load group
     Load(Z80InstructionLocation, Z80InstructionLocation),
@@ -224,6 +225,7 @@ impl Z80Instruction {
             Z80Instruction::Call(cond, addr) =>             format!("call {} {}", cond.to_string(), addr.to_string()),
             Z80Instruction::DecrementJumpNZ(addr) =>        format!("djnz {}", addr.to_string()),
             Z80Instruction::Return(cond) =>                 format!("ret {}", cond.to_string()),
+            Z80Instruction::ReturnInterrupt =>              format!("reti"),
 
             Z80Instruction::Load(dst, src) =>   format!("ld {} {}", dst.to_string(), src.to_string()),
             Z80Instruction::Load16(dst, src) =>   format!("ld16 {} {}", dst.to_string(), src.to_string()),
@@ -799,7 +801,9 @@ impl Z80InstructionDecoder {
         }
 
         // SP
-        else if self.match_byte(0xF9) { Some(ZI::Load16(ZIL::RegisterSP, ZIL::RegisterHL)) }
+        else if self.match_byte(0xF9)           { Some(ZI::Load16(ZIL::RegisterSP, ZIL::RegisterHL)) }
+        else if self.match_bytes(&[0xDD,0xF9])  { Some(ZI::Load16(ZIL::RegisterSP, ZIL::RegisterIX)) }
+        else if self.match_bytes(&[0xFD,0xF9])  { Some(ZI::Load16(ZIL::RegisterSP, ZIL::RegisterIY)) }
         else if self.match_special(&[ZIB::Byte(0x31), ZIB::Placeholder, ZIB::Placeholder]) {
             Some(ZI::Load16(ZIL::RegisterSP, ZIL::Immediate16(self.matched_value_u16(0))))
         }
@@ -1142,6 +1146,9 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xE0) { Some(ZI::Return(ZJC::ParityOdd)) }
         else if self.match_byte(0xF8) { Some(ZI::Return(ZJC::SignNegative)) }
         else if self.match_byte(0xF0) { Some(ZI::Return(ZJC::SignPositive)) }
+
+        // return from interrupt
+        else if self.match_bytes(&[0xED,0x4D])  { Some(ZI::ReturnInterrupt) }
 
         // Z80 manual table 17, restart group
         else if self.match_byte(0xC7) { Some(ZI::Restart(0x00)) }
