@@ -7,6 +7,8 @@ use ggez::event::{KeyCode, KeyMods, GamepadId, Button};
 
 use crate::system::GameGear;
 
+use std::time::Instant;
+
 struct RamWatcher {
     addr: u16,
     name: String,
@@ -204,7 +206,7 @@ impl event::EventHandler for EmulatorWindow {
             let xy = cgmath::Point2::new(40.0 + sw, 20.0 + mf*18.0);
             graphics::draw(ctx, &text, (xy,))?;
         }
-
+        
         // -- draw GG Z80 registers status --
         let text = graphics::Text::new((
                     self.gg.cpu.registers_debug_string().as_str(),
@@ -214,7 +216,6 @@ impl event::EventHandler for EmulatorWindow {
         graphics::draw(ctx, &text, (xy,))?;
 
         // -- draw watchers values --
-        /*
         for (idx,rw) in self.ram_watchers.iter().enumerate() {
             
             let b8 = self.gg.cpu.bus.cpu_read(rw.addr);
@@ -230,7 +231,6 @@ impl event::EventHandler for EmulatorWindow {
             let xy = cgmath::Point2::new(sw + 20.0, sh + 40.0 + mf*18.0);
             graphics::draw(ctx, &text, (xy,))?;
         }
-        */
         
         // -- draw GG VDP palettes --
         //
@@ -315,6 +315,7 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw GG sprite table --
         //
+        /*
         let bx = sw + 40.0 + 16.0*8.0 + 10.0;
         let by = 350.0;
         for py in 0..12 {
@@ -355,6 +356,7 @@ impl event::EventHandler for EmulatorWindow {
                                     r,
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
+        */
 
         // -- draw PSG statuses --
         //
@@ -373,6 +375,7 @@ impl event::EventHandler for EmulatorWindow {
             graphics::draw(ctx, &text, (xy,))?;
         }
 
+        /*
         // -- draw RAM --
         let bx = sw + 40.0;
         let by = 500.0;
@@ -393,12 +396,12 @@ impl event::EventHandler for EmulatorWindow {
                 rgba[4*addr + 3] = 0xff;
             }
         }
-
         let im = graphics::Image::from_rgba8(ctx, 91, 91, &rgba)?;
         graphics::draw(ctx, &im,
             graphics::DrawParam::new()
                 .dest(cgmath::Point2::new(bx,by))
                 .scale(cgmath::Vector2::new(2.0,2.0)))?;
+        */
 
         graphics::present(ctx)
     }

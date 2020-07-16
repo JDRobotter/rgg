@@ -64,7 +64,7 @@ fn main() -> GameResult {
                                         .window_setup(WindowSetup {
                                             title: "RGG".to_owned(),
                                             samples: NumSamples::Zero,
-                                            vsync: false,
+                                            vsync: true,
                                             icon: "".to_owned(),
                                             srgb: true,
                                         })
@@ -76,6 +76,7 @@ fn main() -> GameResult {
 
     // instanciate an emulator window
     let mut emu_window = gui::EmulatorWindow::new(&mut ctx, gg)?;
+
     // run window
     event::run(&mut ctx, &mut event_loop, &mut emu_window)
 }

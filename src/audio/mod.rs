@@ -5,34 +5,46 @@ use cpal::{StreamId,StreamDataResult,SampleRate,SampleFormat,Format,StreamData,U
 use std::sync::{Mutex,Arc};
 use std::thread;
 
-struct LFSR {
+pub struct LFSR {
     register: u16,
     state: bool,
     output: f64,
 }
 
 impl LFSR {
-    fn new() -> LFSR {
+    pub fn new() -> LFSR {
         LFSR {
-            register: 0,
+            register: 0x8000,
             state: false,
             output: 0.0,
         }
     }
 
     fn parity(inr:u16) -> bool {
-        let a = inr & 0x0001 != 0;
-        let b = inr & 0x0008 != 0;
-        return (a && b) || (!a && !b);
+        let inr = inr ^ (inr >> 8);
+        let inr = inr ^ (inr >> 4);
+        let inr = inr ^ (inr >> 2);
+        let inr = inr ^ (inr >> 1);
+        (inr & 1) != 0
     }
 
-    fn shift(&mut self) {
+    pub fn reset(&mut self) {
+        self.register = 0x8000;
+    }
+
+    pub fn output(&self) -> f64 {
+        self.output
+    }
+
+    pub fn shift(&mut self) {
         // apply feedback on register
-        self.register = self.register >> 1;
         if LFSR::parity(self.register) {
             self.register |= 0x8000;
         }
+        
         self.output = if self.register & 0x0001 != 0x0000 { 1.0 } else { 0.0 };
+        
+        self.register = self.register >> 1;
     }
 
     fn update(&mut self, x:f64) -> f64 {
@@ -100,7 +112,7 @@ struct AudioSynthParameters {
 
 impl AudioSynthParameters {
     pub fn new(sample_rate_hz:f64) -> AudioSynthParameters {
-        AudioSynthParameters {
+        let mut asp = AudioSynthParameters {
             sample_rate_hz: sample_rate_hz,
             sample_time: 0.0,
 
@@ -108,7 +120,9 @@ impl AudioSynthParameters {
             
             noise_generator: NoiseGeneratorParameters::new(),
             noise_lfsr: LFSR::new(),
-        }
+        };
+
+        asp
     }
 
     pub fn set_tone_active(&mut self, n:usize, b:bool) {
@@ -156,17 +170,11 @@ impl AudioSynthParameters {
         self.noise_generator.frequency
     }
 
-    fn square(x:f64) -> f64 {
-        /*
-        let mx = x % 1.0;
-        if mx > 0.5 {
-            1.0
-        }
-        else {
-            -1.0
-        }
-        */
+    pub fn reset_noise(&mut self) {
+        self.noise_lfsr.reset();
+    }
 
+    fn square(x:f64) -> f64 {
         // use square function Fourier expansion to "soften" the sound
         const N: usize = 15;
         let mut y = 0.0;
@@ -175,7 +183,7 @@ impl AudioSynthParameters {
             let a = 2.0*(k as f64) - 1.0;
             y += (TWO_PI * a * x).sin() / a;
         }
-
+        
         (4.0*y) / std::f64::consts::PI
     }
 
@@ -191,14 +199,22 @@ impl AudioSynthParameters {
             let tgp = &self.tone_generators[i];
             
             if tgp.active {
-                let x = tgp.frequency * self.sample_time;
-                let y = tgp.amplitude * AudioSynthParameters::square(x);
+
+                let y = if tgp.frequency == 0.0 {
+                    // output DC value
+                    tgp.amplitude
+                }
+                else {
+                    let x = tgp.frequency * self.sample_time;
+                    tgp.amplitude * AudioSynthParameters::square(x)
+                };
 
                 sample += y;
             }
         }
 
-        // noise generator
+        //noise generator
+        /*
         let nf = if self.noise_generator.coupled {
             self.tone_generators[2].frequency
         }
@@ -208,9 +224,10 @@ impl AudioSynthParameters {
         let x = nf * self.sample_time;
         let ny = self.noise_generator.amplitude * self.noise_lfsr.update(x % 1.0);
         sample += ny;
+        */
 
         // general gain
-        sample *= 0.05;
+        sample *= 0.2;
 
         sample as i16
     }
@@ -313,6 +330,11 @@ impl AudioSynth {
         let asp = self.parameters.lock().unwrap();
         asp.get_noise_amplitude()
     } 
+
+    pub fn reset_noise(&mut self) {
+        let mut asp = self.parameters.lock().unwrap();
+        asp.reset_noise()
+    }
 
     fn evloop(stream_id:StreamId, stream_result:StreamDataResult, parameters: &mut AudioSynthParameters) {
 

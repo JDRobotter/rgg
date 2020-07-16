@@ -90,7 +90,7 @@ impl SystemBus {
         }
     }
 
-    pub fn io_read(&mut self, addr:u8) -> u8 {
+    pub fn io_read(&mut self, addr:u8, ncycle:u64) -> u8 {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
@@ -148,7 +148,7 @@ impl SystemBus {
         }
     }
 
-    pub fn io_write(&mut self, addr:u8, data:u8) {
+    pub fn io_write(&mut self, addr:u8, data:u8, ncycle:u64) {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
