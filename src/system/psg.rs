@@ -7,29 +7,14 @@ struct ToneGeneratorRegister {
     attenuation: u8,
 }
 
-#[derive(Clone,Copy)]
-struct NoiseGeneratorRegister {
-    attenuation: u8,
-    feedback: bool,
-    divider: u8,
-}
-
-enum RegisterAddress {
-    ToneDivider(u8),
-    ToneAttenuation(u8),
-    NoiseDivider,
-    NoiseAttenuation,
-    None
-}
 
 /// Sega Game Gear PSG chip
 /// https://www.smspower.org/uploads/Development/SN76489-20030421.txt
 pub struct PSG {
     audio_synth: AudioSynth,
+    latched_byte: u8,
 
     latched_tone_generator_registers: [ToneGeneratorRegister; 3],
-    latched_noise_generator_register: NoiseGeneratorRegister,
-    last_written_register: RegisterAddress,
 }
 
 impl PSG {
@@ -38,9 +23,9 @@ impl PSG {
 
         PSG {
             audio_synth: AudioSynth::new(),
+            latched_byte: 0,
+
             latched_tone_generator_registers: [ToneGeneratorRegister {divider:0, attenuation:0}; 3],
-            latched_noise_generator_register: NoiseGeneratorRegister {attenuation:0, feedback:false, divider:0},
-            last_written_register: RegisterAddress::None,
         }
     }
 
@@ -53,7 +38,10 @@ impl PSG {
     }
 
     fn frequency_from_divider(div:u16) -> f64 {
-        if div == 0 {
+        // https://www.smspower.org/Development/SN76489?from=Development.PSG#SN76489RegisterWrites
+        // when the half-wavelength (tone value) is set to 1, they output a DC offset value
+        // corresponding to the volume level
+        if div <= 1 {
             return 0.0
         }
         const N:u32 = 3579454;
@@ -83,108 +71,68 @@ impl PSG {
         // T : 1: volume / 0: tone
         //
         // second byte
-        // 0  x  F9 F8 F7 F6 F5 F4a
+        // 0  x  F9 F8 F7 F6 F5 F4
         //
         // R : register address
         // F : data
 
-        println!("W {:02x}", byte);
         if byte & 0x80 != 0 {
             // LATCH/DATA byte
-            
-            // register address
-            let ra = (byte >> 5) & 0x03;
-            // volume / tone selector
-            let t = byte & 0x10 != 0;
+            self.latched_byte = byte;
+        }
+
+        // register address
+        let ra = (self.latched_byte >> 5) & 0x03;
+
+        if self.latched_byte & 0x10 != 0 {
+            // volume/tone selector
+
+            let att = byte & 0x0f;
             if ra == 3 {
-                // noise register
-                if t {
-                    println!("PSG NZ ATT {}", byte & 0x0f);
-                    // attenuation
-                    self.latched_noise_generator_register.attenuation = byte & 0x0f;
-                    self.last_written_register = RegisterAddress::NoiseAttenuation;
-                }
-                else {
-                    println!("PSG NZ SHIFT {} {}", (byte & 0x04) == 0, (byte & 0x03));
-                    // shift
-                    self.latched_noise_generator_register.feedback = (byte & 0x04) == 0;
-                    self.latched_noise_generator_register.divider = byte & 0x03;
-                    self.last_written_register = RegisterAddress::NoiseDivider;
-                }
+                // noise register volume
+                self.audio_synth.set_noise_amplitude(PSG::amplitude_from_attenuation(att));
             }
             else {
-                // tone registers
-                if t {
-                    println!("PSG TN {} ATT {}", ra, byte & 0x0f);
-                    // attenuation
-                    self.latched_tone_generator_registers[ra as usize].attenuation = byte & 0x0f;
-                    self.last_written_register = RegisterAddress::ToneAttenuation(ra);
-                }
-                else {
-                    println!("PSG TN {} DIV {}", ra, byte & 0x0f);
-                    // tone divider
-                    self.latched_tone_generator_registers[ra as usize].divider = (byte & 0x0f) as u16;
-                    self.last_written_register = RegisterAddress::ToneDivider(ra);
-                }
+                // tone register volume
+                self.audio_synth.set_tone_amplitude(ra.into(), PSG::amplitude_from_attenuation(att));
             }
 
         }
-        else {
-            // DATA byte
-
-            // complement latched register
-            match self.last_written_register {
-
-                RegisterAddress::ToneDivider(ri) => {
-                    let div = &mut self.latched_tone_generator_registers[ri as usize].divider;
-                    
-                    *div = (*div & 0x0f) | ((byte & 0x3f) as u16) << 4;
-                },
-
-                RegisterAddress::ToneAttenuation(ri) => {
-                    self.latched_tone_generator_registers[ri as usize].attenuation = byte & 0x0f;
-                },
-
-                RegisterAddress::NoiseDivider => {
-                    // nothing to do
-                },
-
-                RegisterAddress::NoiseAttenuation => {
-                    self.latched_noise_generator_register.attenuation = byte & 0x0f;
-                },
-
-                RegisterAddress::None => { 
-                    // nothing to do
-                },
-            }
-
-            self.last_written_register = RegisterAddress::None;
+        else if ra == 3 {
+            // noise register
             
-            println!("PSG LATCH");
-            // apply latched tone registers
-            for ri in 0..3 {
-                let att = self.latched_tone_generator_registers[ri].attenuation;
-                let div = self.latched_tone_generator_registers[ri].divider;
-                self.audio_synth.set_tone_active(ri, div != 0);
-                self.audio_synth.set_tone_frequency(ri, PSG::frequency_from_divider(div));
-                self.audio_synth.set_tone_amplitude(ri, PSG::amplitude_from_attenuation(att));
-            }
-
-            // apply latched noise registers
-            let att = self.latched_noise_generator_register.attenuation;
-            match self.latched_noise_generator_register.divider {
+            match byte & 0x03 {
+                0x00 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(16)) }
                 0x01 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(32)) },
                 0x02 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(64)) },
                 // link to tone generator 3
                 0x03 => { self.audio_synth.set_noise_frequency(true, 0.0) },
-                _ =>    { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(16)) },
-            };
-            let fb = self.latched_noise_generator_register.feedback;
-            self.audio_synth.set_noise_amplitude(PSG::amplitude_from_attenuation(att));
-            self.audio_synth.set_noise_feedback(fb);
+                _ => {},
+            }
+
+            self.audio_synth.set_noise_feedback(byte & 0x04 != 0);
+
+            self.audio_synth.reset_noise();
+        }
+        else {
+            // tone registers
+            let mut div = self.latched_tone_generator_registers[ra as usize].divider;
+
+            let ubyte = byte as u16;
+            if byte & 0x80 != 0 {
+                div = (div & 0xff00) | ((ubyte) & 0x000f);
+            }
+            else {
+                div = (div & 0x00ff) | ((ubyte << 4) & 0x0ff0);
+            }
+
+            self.latched_tone_generator_registers[ra as usize].divider = div;
+
+            self.audio_synth.set_tone_active(ra.into(), div != 0);
+            self.audio_synth.set_tone_frequency(ra.into(), PSG::frequency_from_divider(div));
 
         }
-    }
 
+    }
 
 }

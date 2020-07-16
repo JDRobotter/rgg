@@ -216,7 +216,7 @@ impl Z80 {
         // decrement stack pointer
         self.registers.sp -= 2;
         // copy current contents of the Program Counter on top of the external memory stack
-        self.bus.cpu_write_u16(self.registers.sp, self.registers.pc);
+        self.bus_write_u16(self.registers.sp, self.registers.pc);
         // jump to IRQ address
         self.registers.pc = 0x0038;
     }
@@ -251,7 +251,7 @@ impl Z80 {
         loop {
 
             // fetch one byte from program counter + displacement e
-            let opb = self.bus.cpu_read(self.registers.pc);
+            let opb = self.bus_read(self.registers.pc);
             // increment PC
             self.registers.pc += 1;
 
@@ -285,6 +285,30 @@ impl Z80 {
  
         // test breakpoint
         self.breakpoint_addresses.contains(&self.registers.pc)
+    }
+
+    fn bus_read(&self, addr:u16) -> u8 {
+        self.bus.cpu_read(addr)
+    }
+
+    fn bus_read_u16(&self, addr:u16) -> u16 {
+        self.bus.cpu_read_u16(addr)
+    }
+
+    fn bus_write(&mut self, addr:u16, byte:u8) {
+        self.bus.cpu_write(addr, byte)
+    }
+
+    fn bus_write_u16(&mut self, addr:u16, word:u16) {
+        self.bus.cpu_write_u16(addr, word)
+    }
+
+    fn bus_io_read(&mut self, addr:u8) -> u8 {
+        self.bus.io_read(addr, self.cycles())
+    }
+
+    fn bus_io_write(&mut self, addr:u8, data:u8) {
+        self.bus.io_write(addr, data, self.cycles())
     }
 
     fn add_i8_to_u8(base:u8, displacement:i8) -> u8 {
@@ -342,13 +366,13 @@ impl Z80 {
             ZIL::RegisterL => { self.registers.l },
             ZIL::RegisterIndirectHL => {
                 // fetch byte on bus at address pointed by register HL
-                self.bus.cpu_read(self.registers.HL())
+                self.bus_read(self.registers.HL())
             },
             ZIL::IndexedIX(d) => {
-                self.bus.cpu_read(Z80::add_signed_u8_to_u16(self.registers.ix, d))
+                self.bus_read(Z80::add_signed_u8_to_u16(self.registers.ix, d))
             },
             ZIL::IndexedIY(d) => {
-                self.bus.cpu_read(Z80::add_signed_u8_to_u16(self.registers.iy, d))
+                self.bus_read(Z80::add_signed_u8_to_u16(self.registers.iy, d))
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
@@ -367,16 +391,16 @@ impl Z80 {
             ZIL::RegisterL => { self.registers.l = byte },
             ZIL::RegisterIndirectHL => {
                 // fetch byte on bus at address pointed by register HL
-                self.bus.cpu_write(self.registers.HL(), byte)
+                self.bus_write(self.registers.HL(), byte)
             },
             ZIL::IndexedIX(d) => {
-                self.bus.cpu_write(
+                self.bus_write(
                     Z80::add_signed_u8_to_u16(self.registers.ix, d),
                     byte
                 )
             },
             ZIL::IndexedIY(d) => {
-                self.bus.cpu_write(
+                self.bus_write(
                     Z80::add_signed_u8_to_u16(self.registers.iy, d),
                     byte
                 )
@@ -395,7 +419,7 @@ impl Z80 {
             ZIL::RegisterAFp => { self.alternate_registers.AF() },
             ZIL::RegisterIndirectSP => {
                 // fetch byte on bus at address pointed by register SP
-                self.bus.cpu_read_u16(self.registers.sp)
+                self.bus_read_u16(self.registers.sp)
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
@@ -413,7 +437,7 @@ impl Z80 {
             ZIL::RegisterAFp => { self.alternate_registers.set_AF(word) },
             ZIL::RegisterIndirectSP => {
                 // fetch byte on bus at address pointed by register SP
-                self.bus.cpu_write_u16(self.registers.sp, word)
+                self.bus_write_u16(self.registers.sp, word)
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
@@ -423,7 +447,7 @@ impl Z80 {
                                 op:Z80InstructionLocation) -> u8 {
         match op {
             ZIL::Immediate(b) => { b },
-            ZIL::Indirect16(addr) => { self.bus.cpu_read(addr) },
+            ZIL::Indirect16(addr) => { self.bus_read(addr) },
             ZIL::RegisterA => { self.registers.a },
             ZIL::RegisterB => { self.registers.b },
             ZIL::RegisterC => { self.registers.c },
@@ -437,21 +461,21 @@ impl Z80 {
             },
             ZIL::RegisterIndirectBC => {
                 // fetch byte on bus at address pointed by register BC
-                self.bus.cpu_read(self.registers.BC())
+                self.bus_read(self.registers.BC())
             },
             ZIL::RegisterIndirectDE => {
                 // fetch byte on bus at address pointed by register BC
-                self.bus.cpu_read(self.registers.DE())
+                self.bus_read(self.registers.DE())
             },
             ZIL::RegisterIndirectHL => {
                 // fetch byte on bus at address pointed by register HL
-                self.bus.cpu_read(self.registers.HL())
+                self.bus_read(self.registers.HL())
             },
             ZIL::IndexedIX(d) => {
-                self.bus.cpu_read(Z80::add_signed_u8_to_u16(self.registers.ix, d))
+                self.bus_read(Z80::add_signed_u8_to_u16(self.registers.ix, d))
             },
             ZIL::IndexedIY(d) => {
-                self.bus.cpu_read(Z80::add_signed_u8_to_u16(self.registers.iy, d))
+                self.bus_read(Z80::add_signed_u8_to_u16(self.registers.iy, d))
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
@@ -466,8 +490,8 @@ impl Z80 {
         // HL <- HL + 1
         // Z flag is set if B becomes zero after decrement
 
-        let byte = self.bus.cpu_read(self.registers.HL());
-        self.bus.io_write(self.registers.c, byte);
+        let byte = self.bus_read(self.registers.HL());
+        self.bus_io_write(self.registers.c, byte);
 
         self.registers.set_HL(Z80::add_i8_to_u16(self.registers.HL(), 1));
         self.registers.b = Z80::add_i8_to_u8(self.registers.b, -1);
@@ -485,8 +509,8 @@ impl Z80 {
         // LDD     p.134
         
         // (DE) <- (HL)
-        let byte = self.bus.cpu_read(self.registers.HL());
-        self.bus.cpu_write(self.registers.DE(), byte);
+        let byte = self.bus_read(self.registers.HL());
+        self.bus_write(self.registers.DE(), byte);
         
         // DE <- DE + e
         self.registers.set_DE(Z80::add_i8_to_u16(self.registers.DE(),e));
@@ -530,17 +554,17 @@ impl Z80 {
             ZIL::RegisterL => { self.registers.l },
             ZIL::RegisterIndirectHL => {
                 // fetch byte on bus at address pointed by register HL
-                self.bus.cpu_read(self.registers.HL())
+                self.bus_read(self.registers.HL())
             },
             ZIL::IndexedIX(d) => {
                 // fetch byte on bus at address pointed by register IX + d
                 let addr = Z80::add_signed_u8_to_u16(self.registers.ix, d);
-                self.bus.cpu_read(addr)
+                self.bus_read(addr)
             },
             ZIL::IndexedIY(d) => {
                 // fetch byte on bus at address pointed by register IY + d
                 let addr = Z80::add_signed_u8_to_u16(self.registers.iy, d);
-                self.bus.cpu_read(addr)
+                self.bus_read(addr)
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         };
@@ -557,19 +581,19 @@ impl Z80 {
             ZIL::RegisterH => { self.registers.h = temp }
             ZIL::RegisterL => { self.registers.l = temp }
             ZIL::RegisterIndirectHL => {
-                self.bus.cpu_write(self.registers.HL(), temp);
+                self.bus_write(self.registers.HL(), temp);
             },
             ZIL::IndexedIX(d) => {
                 // fetch byte on bus at address pointed by register IX + d
                 // and write incremented value
                 let addr = Z80::add_signed_u8_to_u16(self.registers.ix, d);
-                self.bus.cpu_write(addr, temp);
+                self.bus_write(addr, temp);
             },
             ZIL::IndexedIY(d) => {
                 // fetch byte on bus at address pointed by register IY + d
                 // and write incremented value
                 let addr = Z80::add_signed_u8_to_u16(self.registers.iy, d);
-                self.bus.cpu_write(addr, temp);
+                self.bus_write(addr, temp);
             },
             _ => { panic!("unhandled operand: {}", op.to_string()) }
         }
@@ -895,7 +919,7 @@ impl Z80 {
                     // decrement stack pointer
                     self.registers.sp -= 2;
                     // copy current contents of the Program Counter on top of the external memory stack
-                    self.bus.cpu_write_u16(self.registers.sp, self.registers.pc);
+                    self.bus_write_u16(self.registers.sp, self.registers.pc);
 
                     // jump to nn
                     self.registers.pc = addr;
@@ -919,7 +943,7 @@ impl Z80 {
                 
                 if self.test_jump_condition(condition) {
                     // copy from top of stack to PC
-                    let addr = self.bus.cpu_read_u16(self.registers.sp);
+                    let addr = self.bus_read_u16(self.registers.sp);
                     // increment stack pointer
                     self.registers.sp += 2;
                     // jump to address
@@ -939,17 +963,17 @@ impl Z80 {
 
             ZI::ReturnInterrupt => {
                 // RETI     p.281
-            
+
                 // restore contents of the PC
                 // (analogous to the RET instruction)
-            
+
                 // copy from top of stack to PC
-                let addr = self.bus.cpu_read_u16(self.registers.sp);
+                let addr = self.bus_read_u16(self.registers.sp);
                 // increment stack pointer
                 self.registers.sp += 2;
                 // jump to address
                 self.registers.pc = addr;
-            
+                
                 // T-states
                 14
             },
@@ -965,7 +989,7 @@ impl Z80 {
                 // decrement stack pointer
                 self.registers.sp -= 2;
                 // copy current contents of the Program Counter on top of the external memory stack
-                self.bus.cpu_write_u16(self.registers.sp, self.registers.pc);
+                self.bus_write_u16(self.registers.sp, self.registers.pc);
                 // jump to address
                 self.registers.pc = addr;
 
@@ -991,7 +1015,7 @@ impl Z80 {
                 // decrement stack pointer
                 self.registers.sp -= 2;
                 // copy fetched word on top of the external memory stack
-                self.bus.cpu_write_u16(self.registers.sp, word);
+                self.bus_write_u16(self.registers.sp, word);
                 // jump to address
 
                 // T-states
@@ -1011,7 +1035,7 @@ impl Z80 {
                 // qqL <- (SP)
                 
                 // copy from top of stack
-                let word = self.bus.cpu_read_u16(self.registers.sp);
+                let word = self.bus_read_u16(self.registers.sp);
                 // increment stack pointer
                 self.registers.sp += 2;
                 // copy to register
@@ -2004,7 +2028,7 @@ impl Z80 {
                 let value = self.unpack_LD_operand(src);
 
                 match dst {
-                    ZIL::Indirect16(addr) => { self.bus.cpu_write(addr,value) },
+                    ZIL::Indirect16(addr) => { self.bus_write(addr,value) },
                     ZIL::RegisterA => { self.registers.a = value},
                     ZIL::RegisterB => { self.registers.b = value},
                     ZIL::RegisterC => { self.registers.c = value},
@@ -2017,24 +2041,24 @@ impl Z80 {
                     },
                     ZIL::RegisterIndirectHL => {
                         // write byte at address pointed by register HL
-                        self.bus.cpu_write(self.registers.HL(), value)
+                        self.bus_write(self.registers.HL(), value)
                     },
                     ZIL::RegisterIndirectDE => {
                         // write byte at address pointed by register DE
-                        self.bus.cpu_write(self.registers.DE(), value)
+                        self.bus_write(self.registers.DE(), value)
                     },
                     ZIL::RegisterIndirectBC => {
                         // write byte at address pointed by register BC
-                        self.bus.cpu_write(self.registers.BC(), value)
+                        self.bus_write(self.registers.BC(), value)
                     },
                     ZIL::IndexedIX(d) => {
-                        self.bus.cpu_write(
+                        self.bus_write(
                             Z80::add_signed_u8_to_u16(self.registers.ix, d),
                             value
                         )
                     },
                     ZIL::IndexedIY(d) => {
-                        self.bus.cpu_write(
+                        self.bus_write(
                             Z80::add_signed_u8_to_u16(self.registers.iy, d),
                             value
                         )
@@ -2067,7 +2091,7 @@ impl Z80 {
                 // unpack value to load
                 let value = match src {
                     ZIL::Immediate16(w)     => { w },
-                    ZIL::Indirect16(addr)   => { self.bus.cpu_read_u16(addr) },
+                    ZIL::Indirect16(addr)   => { self.bus_read_u16(addr) },
                     ZIL::RegisterBC => { self.registers.BC() },
                     ZIL::RegisterDE => { self.registers.DE() },
                     ZIL::RegisterHL => { self.registers.HL() },
@@ -2079,7 +2103,7 @@ impl Z80 {
                 };
 
                 match dst {
-                    ZIL::Indirect16(addr) => { self.bus.cpu_write_u16(addr, value) },
+                    ZIL::Indirect16(addr) => { self.bus_write_u16(addr, value) },
                     ZIL::RegisterBC => { self.registers.set_BC(value) },
                     ZIL::RegisterDE => { self.registers.set_DE(value) },
                     ZIL::RegisterHL => { self.registers.set_HL(value) },
@@ -2120,7 +2144,7 @@ impl Z80 {
                 };
 
                 // fetch byte on IO bus
-                let byte = self.bus.io_read(addr);
+                let byte = self.bus_io_read(addr);
 
                 // store byte
                 match dst {
@@ -2147,13 +2171,13 @@ impl Z80 {
 
                 let addr = match dst {
                     ZIL::Indirect(b) => b,
-                    ZIL::RegisterIndirectA => self.bus.io_read(self.registers.a),
-                    ZIL::RegisterIndirectB => self.bus.io_read(self.registers.b),
-                    ZIL::RegisterIndirectC => self.bus.io_read(self.registers.c),
-                    ZIL::RegisterIndirectD => self.bus.io_read(self.registers.d),
-                    ZIL::RegisterIndirectE => self.bus.io_read(self.registers.e),
-                    ZIL::RegisterIndirectH => self.bus.io_read(self.registers.h),
-                    ZIL::RegisterIndirectL => self.bus.io_read(self.registers.l),
+                    ZIL::RegisterIndirectA => self.bus_io_read(self.registers.a),
+                    ZIL::RegisterIndirectB => self.bus_io_read(self.registers.b),
+                    ZIL::RegisterIndirectC => self.bus_io_read(self.registers.c),
+                    ZIL::RegisterIndirectD => self.bus_io_read(self.registers.d),
+                    ZIL::RegisterIndirectE => self.bus_io_read(self.registers.e),
+                    ZIL::RegisterIndirectH => self.bus_io_read(self.registers.h),
+                    ZIL::RegisterIndirectL => self.bus_io_read(self.registers.l),
                     _ => { panic!("unhandled operand: {}", dst.to_string()) }
                 };
                 
@@ -2163,7 +2187,7 @@ impl Z80 {
                 };
 
                 // write byte on IO bus
-                self.bus.io_write(addr, byte);
+                self.bus_io_write(addr, byte);
 
                 // T-states
                 match dst {
