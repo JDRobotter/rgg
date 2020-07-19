@@ -358,23 +358,6 @@ impl event::EventHandler for EmulatorWindow {
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
         */
 
-        // -- draw PSG statuses --
-        //
-        let bx = 450.0;
-        let by = sh + 40.0;
-        for i in 0..3 {
-            let f_hz = self.gg.cpu.bus.psg.debug_get_tone_frequency(i);
-            let amp = self.gg.cpu.bus.psg.debug_get_tone_amplitude(i);
-            let amp = amp / 327.670;
-            let text = graphics::Text::new((
-                    format!("{} {:8.1} {:4.0}",i,f_hz,amp),
-                    self.font,
-                    16.0));
-            let y = by + (i as f32) * 12.0;
-            let xy = cgmath::Point2::new(bx, y);
-            graphics::draw(ctx, &text, (xy,))?;
-        }
-
         /*
         // -- draw RAM --
         let bx = sw + 40.0;

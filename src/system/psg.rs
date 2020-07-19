@@ -1,5 +1,6 @@
 
 use crate::audio::AudioSynth;
+use crate::audio::AudioSynthCommand as ASC;
 
 #[derive(Clone,Copy)]
 struct ToneGeneratorRegister {
@@ -29,14 +30,6 @@ impl PSG {
         }
     }
 
-    pub fn debug_get_tone_amplitude(&mut self, n:usize) -> f64 {
-        self.audio_synth.get_tone_amplitude(n)
-    }
-
-    pub fn debug_get_tone_frequency(&mut self, n:usize) -> f64 {
-        self.audio_synth.get_tone_frequency(n)
-    }
-
     fn frequency_from_divider(div:u16) -> f64 {
         // https://www.smspower.org/Development/SN76489?from=Development.PSG#SN76489RegisterWrites
         // when the half-wavelength (tone value) is set to 1, they output a DC offset value
@@ -62,7 +55,7 @@ impl PSG {
         }
     }
 
-    pub fn write(&mut self, byte: u8) {
+    pub fn write(&mut self, byte: u8, ncycle:u64) {
 
         // first byte (latched)
         // 1  R1 R0 T  F3 F2 F1 F0
@@ -90,11 +83,15 @@ impl PSG {
             let att = byte & 0x0f;
             if ra == 3 {
                 // noise register volume
-                self.audio_synth.set_noise_amplitude(PSG::amplitude_from_attenuation(att));
+                self.audio_synth.push(
+                    ASC::SetNoiseAmplitude(ncycle, PSG::amplitude_from_attenuation(att))
+                );
             }
             else {
                 // tone register volume
-                self.audio_synth.set_tone_amplitude(ra.into(), PSG::amplitude_from_attenuation(att));
+                self.audio_synth.push(
+                    ASC::SetToneAmplitude(ncycle, ra.into(), PSG::amplitude_from_attenuation(att))
+                );
             }
 
         }
@@ -102,17 +99,34 @@ impl PSG {
             // noise register
             
             match byte & 0x03 {
-                0x00 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(16)) }
-                0x01 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(32)) },
-                0x02 => { self.audio_synth.set_noise_frequency(false, PSG::frequency_from_divider(64)) },
+                0x00 => {
+                    self.audio_synth.push(
+                        ASC::SetNoiseFrequency(ncycle, false, PSG::frequency_from_divider(16))
+                    )
+                },
+                0x01 => {
+                    self.audio_synth.push(
+                        ASC::SetNoiseFrequency(ncycle, false, PSG::frequency_from_divider(32))
+                    )
+                },
+                0x02 => {
+                    self.audio_synth.push(
+                        ASC::SetNoiseFrequency(ncycle, false, PSG::frequency_from_divider(64))
+                    )
+                },
                 // link to tone generator 3
-                0x03 => { self.audio_synth.set_noise_frequency(true, 0.0) },
+                0x03 => {
+                    self.audio_synth.push(
+                        ASC::SetNoiseFrequency(ncycle, true, 0.0)
+                    )
+                },
                 _ => {},
             }
 
-            self.audio_synth.set_noise_feedback(byte & 0x04 != 0);
+            self.audio_synth.push(
+                ASC::SetNoiseFeedback(ncycle, byte & 0x04 != 0)
+            );
 
-            self.audio_synth.reset_noise();
         }
         else {
             // tone registers
@@ -128,8 +142,12 @@ impl PSG {
 
             self.latched_tone_generator_registers[ra as usize].divider = div;
 
-            self.audio_synth.set_tone_active(ra.into(), div != 0);
-            self.audio_synth.set_tone_frequency(ra.into(), PSG::frequency_from_divider(div));
+            self.audio_synth.push(
+                ASC::SetToneActive(ncycle, ra.into(), div != 0)
+            );
+            self.audio_synth.push(
+                ASC::SetToneFrequency(ncycle, ra.into(), PSG::frequency_from_divider(div))
+            );
 
         }
 

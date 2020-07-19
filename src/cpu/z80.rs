@@ -15,8 +15,6 @@ use Z80JumpCondition as ZJC;
 
 use std::mem;
 
-use std::time::{Duration, Instant};
-
 bitflags! {
     struct Z80StatusFlags: u8 {
         const S =   0b1000_0000;

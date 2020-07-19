@@ -181,11 +181,11 @@ impl SystemBus {
             },
             // SN 76489 data
             0x7E => {
-                self.psg.write(data)
+                self.psg.write(data, ncycle)
             },
             // SN 76489 data (mirror)
             0x7F => {
-                self.psg.write(data)
+                self.psg.write(data, ncycle)
             },
             // VDP data
             0xBE => {

@@ -5,6 +5,9 @@ use cpal::{StreamId,StreamDataResult,SampleRate,SampleFormat,Format,StreamData,U
 use std::sync::{Mutex,Arc};
 use std::thread;
 
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
+
 pub struct LFSR {
     register: u16,
     state: bool,
@@ -100,7 +103,18 @@ impl NoiseGeneratorParameters {
     }
 }
 
-struct AudioSynthParameters {
+pub enum AudioSynthCommand {
+    SetToneActive(u64, usize, bool),
+    SetToneAmplitude(u64, usize, f64),
+    SetToneFrequency(u64, usize, f64),
+    SetNoiseAmplitude(u64, f64),
+    SetNoiseFrequency(u64, bool, f64),
+    SetNoiseFeedback(u64, bool),
+}
+
+struct AudioSynthGenerator {
+    queue: Receiver<AudioSynthCommand>,
+
     sample_rate_hz: f64,
     sample_time: f64,
 
@@ -110,9 +124,11 @@ struct AudioSynthParameters {
     noise_lfsr: LFSR,
 }
 
-impl AudioSynthParameters {
-    pub fn new(sample_rate_hz:f64) -> AudioSynthParameters {
-        let mut asp = AudioSynthParameters {
+impl AudioSynthGenerator {
+    pub fn new(rx:Receiver<AudioSynthCommand>, sample_rate_hz:f64) -> AudioSynthGenerator {
+        AudioSynthGenerator {
+            queue: rx,
+
             sample_rate_hz: sample_rate_hz,
             sample_time: 0.0,
 
@@ -120,11 +136,20 @@ impl AudioSynthParameters {
             
             noise_generator: NoiseGeneratorParameters::new(),
             noise_lfsr: LFSR::new(),
-        };
-
-        asp
+        }
     }
 
+    pub fn pop_command(&mut self) {
+
+
+    }
+
+    fn apply_command(&mut self, command:AudioSynthCommand) {
+        match command {
+
+        }
+    }
+/*
     pub fn set_tone_active(&mut self, n:usize, b:bool) {
         self.tone_generators[n].active = b;
     }
@@ -173,6 +198,7 @@ impl AudioSynthParameters {
     pub fn reset_noise(&mut self) {
         self.noise_lfsr.reset();
     }
+*/
 
     fn square(x:f64) -> f64 {
         // use square function Fourier expansion to "soften" the sound
@@ -206,7 +232,7 @@ impl AudioSynthParameters {
                 }
                 else {
                     let x = tgp.frequency * self.sample_time;
-                    tgp.amplitude * AudioSynthParameters::square(x)
+                    tgp.amplitude * AudioSynthGenerator::square(x)
                 };
 
                 sample += y;
@@ -233,9 +259,9 @@ impl AudioSynthParameters {
     }
 }
 
-pub struct AudioSynth {
 
-    parameters: Arc<Mutex<AudioSynthParameters>>,
+pub struct AudioSynth {
+    queue: Sender<AudioSynthCommand>,
 }
 
 impl AudioSynth {
@@ -257,104 +283,44 @@ impl AudioSynth {
         let sid = event_loop.build_output_stream(&device, &format)
                     .expect("failed to ::build_output_stream");
 
-        let parameters = Arc::new(Mutex::new(AudioSynthParameters::new(44100.0)));
+        // instanciate mt channel
+        let (tx,rx): (Sender<AudioSynthCommand>, Receiver<AudioSynthCommand>) = mpsc::channel();
 
-        println!("playing");
         event_loop.play_stream(sid).expect("failed to ::play_stream");
 
         // spawn a thread running cpal event loop
-        let tp = parameters.clone();
         thread::spawn(move || {
+
+            let mut generator = AudioSynthGenerator::new(rx, 44100.0);
+
             event_loop.run(move |stream_id,stream_result| {
-                let asp = &mut tp.lock().unwrap();
-                AudioSynth::evloop(stream_id, stream_result, asp);
+                let stream_data = match stream_result {
+                    Ok(data) => data,
+                    Err(err) => {
+                        eprintln!("an error occured on stream {:?}: {}",
+                            stream_id, err);
+                        return;
+                    }
+                };
+
+                match stream_data {
+                    StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
+                        for e in buffer.iter_mut() {
+                            *e = generator.next_sample();
+                        }
+                    },
+                    _ => (),
+                }
             });
         });
 
         AudioSynth {
-            parameters: parameters.clone(),
+            queue:tx,
         }
     }
 
-    pub fn set_tone_active(&mut self, n:usize, b:bool) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.set_tone_active(n,b);
+    pub fn push(&mut self, command:AudioSynthCommand) {
+        self.queue.send(command).unwrap();
     }
 
-    pub fn set_tone_frequency(&mut self, n:usize, f:f64) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.set_tone_frequency(n,f);
-    }
-
-    pub fn get_tone_frequency(&mut self, n:usize) -> f64 {
-        let asp = self.parameters.lock().unwrap();
-        asp.get_tone_frequency(n)
-    }
-
-    pub fn set_tone_amplitude(&mut self, n:usize, a:f64) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.set_tone_amplitude(n,a);
-    }
-
-    pub fn get_tone_amplitude(&mut self, n:usize) -> f64 {
-        let asp = self.parameters.lock().unwrap();
-        asp.get_tone_amplitude(n)
-    }
-
-    pub fn set_noise_feedback(&mut self, b:bool) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.set_noise_feedback(b);
-    }   
-
-    pub fn get_noise_feedback(&mut self) -> bool {
-        let asp = self.parameters.lock().unwrap();
-        asp.get_noise_feedback()
-    } 
-
-    pub fn set_noise_frequency(&mut self, coupled:bool, f:f64) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.set_noise_frequency(coupled,f);
-    }   
-
-    pub fn get_noise_frequency(&mut self) -> f64 {
-        let asp = self.parameters.lock().unwrap();
-        asp.get_noise_frequency()
-    } 
-
-    pub fn set_noise_amplitude(&mut self, a:f64) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.set_noise_amplitude(a);
-    }   
-
-    pub fn get_noise_amplitude(&mut self) -> f64 {
-        let asp = self.parameters.lock().unwrap();
-        asp.get_noise_amplitude()
-    } 
-
-    pub fn reset_noise(&mut self) {
-        let mut asp = self.parameters.lock().unwrap();
-        asp.reset_noise()
-    }
-
-    fn evloop(stream_id:StreamId, stream_result:StreamDataResult, parameters: &mut AudioSynthParameters) {
-
-        let stream_data = match stream_result {
-            Ok(data) => data,
-            Err(err) => {
-                eprintln!("an error occured on stream {:?}: {}",
-                    stream_id, err);
-                return;
-            }
-        };
-
-        match stream_data {
-            StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
-                for e in buffer.iter_mut() {
-                    *e = parameters.next_sample();
-                }
-            },
-            _ => (),
-        }
-
-    }
 }
