@@ -937,6 +937,23 @@ impl Z80 {
                 }
             },
 
+            ZI::ReturnInterrupt => {
+                // RETI     p.281
+            
+                // restore contents of the PC
+                // (analogous to the RET instruction)
+            
+                // copy from top of stack to PC
+                let addr = self.bus.cpu_read_u16(self.registers.sp);
+                // increment stack pointer
+                self.registers.sp += 2;
+                // jump to address
+                self.registers.pc = addr;
+            
+                // T-states
+                14
+            },
+
             ZI::Restart(addr) => {
                 // RST p    p.292
     
