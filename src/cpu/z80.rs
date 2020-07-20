@@ -190,6 +190,10 @@ impl Z80 {
         }
     }
 
+    pub fn clock_frequency_hz() -> u64 {
+        3579545
+    }
+
     pub fn reset(&mut self) {
         self.registers.pc = 0;
     }
