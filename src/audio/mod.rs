@@ -8,6 +8,8 @@ use std::thread;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 
+use crate::cpu::Z80;
+
 pub struct LFSR {
     register: u16,
     state: bool,
@@ -103,102 +105,77 @@ impl NoiseGeneratorParameters {
     }
 }
 
-pub enum AudioSynthCommand {
-    SetToneActive(u64, usize, bool),
-    SetToneAmplitude(u64, usize, f64),
-    SetToneFrequency(u64, usize, f64),
-    SetNoiseAmplitude(u64, f64),
-    SetNoiseFrequency(u64, bool, f64),
-    SetNoiseFeedback(u64, bool),
+#[derive(Copy,Clone)]
+pub enum AudioSynthAction {
+    SetToneActive(usize, bool),
+    SetToneAmplitude(usize, f64),
+    SetToneFrequency(usize, f64),
+    SetNoiseAmplitude(f64),
+    SetNoiseFrequency(bool, f64),
+    SetNoiseFeedback(bool),
+}
+use AudioSynthAction as ASA;
+
+#[derive(Copy,Clone)]
+pub struct AudioSynthCommand {
+    cycle: u64,
+    action: AudioSynthAction,
+}
+
+impl AudioSynthCommand {
+
+    pub fn new(cycle: u64, action: AudioSynthAction) -> AudioSynthCommand {
+        AudioSynthCommand {
+            cycle: cycle,
+            action: action,
+        }
+    }
 }
 
 struct AudioSynthGenerator {
     queue: Receiver<AudioSynthCommand>,
 
-    sample_rate_hz: f64,
-    sample_time: f64,
+    sample_rate_hz: u64,
+    sample_time_sps: u64,
 
     tone_generators: [ToneGeneratorParameters; 3],
 
     noise_generator: NoiseGeneratorParameters,
     noise_lfsr: LFSR,
+
+    next_command: Option<AudioSynthCommand>,
 }
 
 impl AudioSynthGenerator {
-    pub fn new(rx:Receiver<AudioSynthCommand>, sample_rate_hz:f64) -> AudioSynthGenerator {
+    pub fn new(rx:Receiver<AudioSynthCommand>, sample_rate_hz:u64) -> AudioSynthGenerator {
         AudioSynthGenerator {
             queue: rx,
 
             sample_rate_hz: sample_rate_hz,
-            sample_time: 0.0,
+            sample_time_sps: 0,
 
             tone_generators: [ToneGeneratorParameters::new(); 3],
             
             noise_generator: NoiseGeneratorParameters::new(),
             noise_lfsr: LFSR::new(),
+
+            next_command: None,
         }
     }
 
-    pub fn pop_command(&mut self) {
-
-
-    }
-
-    fn apply_command(&mut self, command:AudioSynthCommand) {
-        match command {
-
+    fn apply_action(&mut self, action:AudioSynthAction) {
+        match action {
+            ASA::SetToneActive(n,b) =>      { self.tone_generators[n].active = b; },
+            ASA::SetToneAmplitude(n,v) =>   { self.tone_generators[n].amplitude = v; },
+            ASA::SetToneFrequency(n,f) =>   { self.tone_generators[n].frequency = f; },
+            ASA::SetNoiseAmplitude(v) =>    { self.noise_generator.amplitude = v; },
+            ASA::SetNoiseFeedback(b) =>     { self.noise_generator.feedback = b; },
+            ASA::SetNoiseFrequency(b,f) =>  {
+                self.noise_generator.frequency = f;
+                self.noise_generator.coupled = b;
+            },
         }
     }
-/*
-    pub fn set_tone_active(&mut self, n:usize, b:bool) {
-        self.tone_generators[n].active = b;
-    }
-
-    pub fn set_tone_frequency(&mut self, n:usize, f:f64) {
-        self.tone_generators[n].frequency = f;
-    }
-
-    pub fn get_tone_frequency(&self, n:usize) -> f64 {
-        self.tone_generators[n].frequency
-    }
-
-    pub fn set_tone_amplitude(&mut self, n:usize, a:f64) {
-        self.tone_generators[n].amplitude = a;
-    }
- 
-    pub fn get_tone_amplitude(&self, n:usize) -> f64 {
-        self.tone_generators[n].amplitude
-    }
-
-    pub fn set_noise_amplitude(&mut self, a:f64) {
-        self.noise_generator.amplitude = a;
-    }
- 
-    pub fn get_noise_amplitude(&self) -> f64 {
-        self.noise_generator.amplitude
-    }
-
-    pub fn set_noise_feedback(&mut self, b:bool) {
-        self.noise_generator.feedback = b
-    }
-
-    pub fn get_noise_feedback(&self) -> bool {
-        self.noise_generator.feedback
-    }
-
-    pub fn set_noise_frequency(&mut self, b:bool, f:f64) {
-        self.noise_generator.frequency = f;
-        self.noise_generator.coupled = b;
-    }
-
-    pub fn get_noise_frequency(&self) -> f64 {
-        self.noise_generator.frequency
-    }
-
-    pub fn reset_noise(&mut self) {
-        self.noise_lfsr.reset();
-    }
-*/
 
     fn square(x:f64) -> f64 {
         // use square function Fourier expansion to "soften" the sound
@@ -215,10 +192,35 @@ impl AudioSynthGenerator {
 
     fn next_sample(&mut self) -> i16 {
 
+        // increment sample time
+        self.sample_time_sps += 1;
+        // convert to audio time in us
+        let audio_time_us = 1_000_000 * self.sample_time_sps / self.sample_rate_hz;
+
+        // pop next command if needed
+        if self.next_command.is_none() {
+            self.next_command = self.queue.try_recv().ok();
+        }
+
+        // execute next command when scheduleded
+        if let Some(command) = self.next_command {
+            // time in CPU cycles at which command was emited
+            let rcycle = command.cycle;
+            // convert to time in microseconds
+            let time_us = 1_000_000 * rcycle / Z80::clock_frequency_hz();
+            
+            let dt = audio_time_us - time_us;
+            println!("{}", dt);
+            if dt > 500000 {
+                self.apply_action(command.action);
+                // reset command
+                self.next_command = None
+            }
+        }
+
         let mut sample:f64 = 0.0;
         // increment time
-        let step_s = 1.0 / self.sample_rate_hz;
-        self.sample_time += step_s;
+        let sample_time = self.sample_time_sps as f64 / self.sample_rate_hz as f64;
 
         // iterate over tone generators
         for i in 0..3 {
@@ -231,7 +233,7 @@ impl AudioSynthGenerator {
                     tgp.amplitude
                 }
                 else {
-                    let x = tgp.frequency * self.sample_time;
+                    let x = tgp.frequency * sample_time;
                     tgp.amplitude * AudioSynthGenerator::square(x)
                 };
 
@@ -291,7 +293,7 @@ impl AudioSynth {
         // spawn a thread running cpal event loop
         thread::spawn(move || {
 
-            let mut generator = AudioSynthGenerator::new(rx, 44100.0);
+            let mut generator = AudioSynthGenerator::new(rx, 44100);
 
             event_loop.run(move |stream_id,stream_result| {
                 let stream_data = match stream_result {

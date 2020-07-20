@@ -1,5 +1,6 @@
 
 use crate::audio::AudioSynth;
+use crate::audio::AudioSynthAction as ASA;
 use crate::audio::AudioSynthCommand as ASC;
 
 #[derive(Clone,Copy)]
@@ -83,15 +84,15 @@ impl PSG {
             let att = byte & 0x0f;
             if ra == 3 {
                 // noise register volume
-                self.audio_synth.push(
-                    ASC::SetNoiseAmplitude(ncycle, PSG::amplitude_from_attenuation(att))
-                );
+                self.audio_synth.push(ASC::new(ncycle,
+                    ASA::SetNoiseAmplitude(PSG::amplitude_from_attenuation(att))
+                ));
             }
             else {
                 // tone register volume
-                self.audio_synth.push(
-                    ASC::SetToneAmplitude(ncycle, ra.into(), PSG::amplitude_from_attenuation(att))
-                );
+                self.audio_synth.push(ASC::new(ncycle,
+                    ASA::SetToneAmplitude(ra.into(), PSG::amplitude_from_attenuation(att))
+                ));
             }
 
         }
@@ -100,32 +101,32 @@ impl PSG {
             
             match byte & 0x03 {
                 0x00 => {
-                    self.audio_synth.push(
-                        ASC::SetNoiseFrequency(ncycle, false, PSG::frequency_from_divider(16))
-                    )
+                    self.audio_synth.push(ASC::new(ncycle,
+                        ASA::SetNoiseFrequency(false, PSG::frequency_from_divider(16))
+                    ))
                 },
                 0x01 => {
-                    self.audio_synth.push(
-                        ASC::SetNoiseFrequency(ncycle, false, PSG::frequency_from_divider(32))
-                    )
+                    self.audio_synth.push(ASC::new(ncycle,
+                        ASA::SetNoiseFrequency(false, PSG::frequency_from_divider(32))
+                    ))
                 },
                 0x02 => {
-                    self.audio_synth.push(
-                        ASC::SetNoiseFrequency(ncycle, false, PSG::frequency_from_divider(64))
-                    )
+                    self.audio_synth.push(ASC::new(ncycle,
+                        ASA::SetNoiseFrequency(false, PSG::frequency_from_divider(64))
+                    ))
                 },
                 // link to tone generator 3
                 0x03 => {
-                    self.audio_synth.push(
-                        ASC::SetNoiseFrequency(ncycle, true, 0.0)
-                    )
+                    self.audio_synth.push(ASC::new(ncycle,
+                        ASA::SetNoiseFrequency(true, 0.0)
+                    ))
                 },
                 _ => {},
             }
 
-            self.audio_synth.push(
-                ASC::SetNoiseFeedback(ncycle, byte & 0x04 != 0)
-            );
+            self.audio_synth.push(ASC::new(ncycle,
+                ASA::SetNoiseFeedback(byte & 0x04 != 0)
+            ));
 
         }
         else {
@@ -142,12 +143,12 @@ impl PSG {
 
             self.latched_tone_generator_registers[ra as usize].divider = div;
 
-            self.audio_synth.push(
-                ASC::SetToneActive(ncycle, ra.into(), div != 0)
-            );
-            self.audio_synth.push(
-                ASC::SetToneFrequency(ncycle, ra.into(), PSG::frequency_from_divider(div))
-            );
+            self.audio_synth.push(ASC::new(ncycle,
+                ASA::SetToneActive(ra.into(), div != 0)
+            ));
+            self.audio_synth.push(ASC::new(ncycle,
+                ASA::SetToneFrequency(ra.into(), PSG::frequency_from_divider(div))
+            ));
 
         }
 
