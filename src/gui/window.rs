@@ -7,6 +7,7 @@ use ggez::event::{KeyCode, KeyMods, GamepadId, Button};
 
 use crate::system::GameGear;
 
+use crate::math::ScalarStatistics;
 use std::time::Instant;
 
 struct RamWatcher {
@@ -24,6 +25,8 @@ pub struct EmulatorWindow {
     run_one: bool,
 
     ram_watchers: Vec<RamWatcher>,
+
+    cpu_time: ScalarStatistics,
 }
 
 impl EmulatorWindow {
@@ -46,6 +49,7 @@ impl EmulatorWindow {
             running: true,
             run_one: false,
             ram_watchers: watchers,
+            cpu_time: ScalarStatistics::new(120),
         })
     }
 
@@ -116,6 +120,9 @@ impl event::EventHandler for EmulatorWindow {
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
 
+        let fps = ggez::timer::fps(ctx);
+
+        let cpu_start = Instant::now();
         loop {
             if self.running {
                 // step till next frame is ready
@@ -140,10 +147,26 @@ impl event::EventHandler for EmulatorWindow {
                 break;
             }
         }
+        self.cpu_time.update(
+            cpu_start.elapsed().as_micros() as f64
+        );
 
         // -- start drawing --
         //
         graphics::clear(ctx, Color::new(0.1,0.1,0.1,1.0));
+
+        // -- draw emulator stats --
+        let text = graphics::Text::new((
+                    format!("{:1.1} fps {:0.0}us {:0.0}us {:0.0}us",
+                            fps,
+                            self.cpu_time.min(),
+                            self.cpu_time.mean(),
+                            self.cpu_time.max(),
+                        ),
+                    self.font,
+                    14.0));
+        let xy = cgmath::Point2::new(20.0, 1.0);
+        graphics::draw(ctx, &text, (xy,))?;
 
         // -- draw GG LCD screen --
         // draw border
@@ -157,7 +180,6 @@ impl event::EventHandler for EmulatorWindow {
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
         // draw screen 
-        
         self.gg.cpu.bus.vdp.render();
 
         let mut rgba: [u8;160*144*4] = [0;160*144*4];
