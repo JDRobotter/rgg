@@ -219,8 +219,8 @@ impl AudioSynthGenerator {
                 // convert to time in microseconds
                 let time_us = 1_000_000 * rcycle / Z80::clock_frequency_hz();
 
-                let dt = (audio_time_us - time_us) + self.sync_timing_us.unwrap_or(0);
-                if dt > 10000 {
+                let dt = (audio_time_us - time_us) - self.sync_timing_us.unwrap_or(0);
+                if dt > 0 {
                     self.apply_action(command.action, command.cycle);
                     // reset command
                     self.next_command = None

@@ -49,7 +49,7 @@ impl EmulatorWindow {
             running: true,
             run_one: false,
             ram_watchers: watchers,
-            cpu_time: ScalarStatistics::new(120),
+            cpu_time: ScalarStatistics::new(5*60),
         })
     }
 
