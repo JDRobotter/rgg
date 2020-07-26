@@ -164,7 +164,7 @@ pub struct Z80 {
     breakpoint_addresses: Vec<u16>,
 
     // number of cycles
-    ncycles: u64,
+    ncycles: i64,
 }
 
 impl Z80 {
@@ -190,7 +190,7 @@ impl Z80 {
         }
     }
 
-    pub fn clock_frequency_hz() -> u64 {
+    pub fn clock_frequency_hz() -> i64 {
         3579545
     }
 
@@ -198,7 +198,7 @@ impl Z80 {
         self.registers.pc = 0;
     }
 
-    pub fn cycles(&self) -> u64 {
+    pub fn cycles(&self) -> i64 {
         self.ncycles
     }
 
@@ -273,7 +273,7 @@ impl Z80 {
                     self.last_decoded_instruction = ins;
 
                     // increment cycles counter
-                    self.ncycles += tstates as u64;
+                    self.ncycles += tstates as i64;
 
                     break;
                 },
