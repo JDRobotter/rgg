@@ -56,7 +56,11 @@ impl PSG {
         }
     }
 
-    pub fn write(&mut self, byte: u8, ncycle:u64) {
+    pub fn synchronize_timing(&mut self, ncycle:i64) {
+        self.audio_synth.push(ASC::new(ncycle, ASA::SyncTiming))
+    }
+
+    pub fn write(&mut self, byte: u8, ncycle:i64) {
 
         // first byte (latched)
         // 1  R1 R0 T  F3 F2 F1 F0

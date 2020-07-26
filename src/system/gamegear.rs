@@ -15,7 +15,10 @@ pub struct GameGear {
     // debug file
 
     // last scanline in cpu cycles
-    last_scanline_cycle: u64,
+    last_scanline_cycle: i64,
+
+    // first game gear step
+    first_step: bool,
 }
 
 impl GameGear {
@@ -42,6 +45,7 @@ impl GameGear {
             cpu: cpu,
             instructions: VecDeque::new(),
             last_scanline_cycle: 0,
+            first_step: true,
         }
     }
 
@@ -55,6 +59,14 @@ impl GameGear {
 
     pub fn step(&mut self) -> (bool,bool) {
 
+        // if this step is the first one, synchronize CPU emulation
+        // and PSG emulation timings
+        if self.first_step {
+
+            self.cpu.bus.synchronize_psg(0);
+
+            self.first_step = false;
+        }
         // emulate for one scaneline
         //
         // a frame is 1/60Hz = 16.66 ms long
