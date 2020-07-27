@@ -197,6 +197,8 @@ pub enum Z80Instruction {
     Out(Z80InstructionLocation, Z80InstructionLocation),
     OutIncrement,
     OutIncrementRepeat,
+    OutDecrement,
+    OutDecrementRepeat,
 
     // restart group
     Restart(u16),
@@ -275,8 +277,12 @@ impl Z80Instruction {
             Z80Instruction::SetCarryFlag		        => format!("scf"),
 
             Z80Instruction::Out(dst,src) => format!("out {},{}", dst.to_string(), src.to_string()),
+
             Z80Instruction::OutIncrement => format!("outi"),
             Z80Instruction::OutIncrementRepeat => format!("otir"),
+            Z80Instruction::OutDecrement => format!("outd"),
+            Z80Instruction::OutDecrementRepeat => format!("otdr"),
+
             Z80Instruction::In(dst,src) => format!("in {},{}", dst.to_string(), src.to_string()),
 
             Z80Instruction::Restart(addr)   => format!("rst {:02x}", addr),
@@ -1197,6 +1203,8 @@ impl Z80InstructionDecoder {
 
         else if self.match_bytes(&[0xED, 0xA3]) { Some(ZI::OutIncrement) }
         else if self.match_bytes(&[0xED, 0xB3]) { Some(ZI::OutIncrementRepeat) }
+        else if self.match_bytes(&[0xED, 0xAB]) { Some(ZI::OutDecrement) }
+        else if self.match_bytes(&[0xED, 0xBB]) { Some(ZI::OutDecrementRepeat) }
 
         else { None }
     }

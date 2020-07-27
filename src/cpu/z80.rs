@@ -505,6 +505,28 @@ impl Z80 {
         self.registers.flags.set(ZSF::Z, self.registers.b == 0);
     }
 
+    /// Perform a OUTI instruction
+    fn out_decrement(&mut self) {
+        // OUTD     p.285
+
+        // (C) <- (HL)
+        // B  <- B - 1
+        // HL <- HL - 1
+        // Z flag is set if B becomes zero after decrement
+
+        let byte = self.bus_read(self.registers.HL());
+        self.bus_io_write(self.registers.c, byte);
+
+        self.registers.set_HL(Z80::add_i8_to_u16(self.registers.HL(), 1));
+        self.registers.b = Z80::add_i8_to_u8(self.registers.b, -1);
+
+        // update flags
+        // add/sub
+        self.registers.flags.set(ZSF::N, true);
+        // zero
+        self.registers.flags.set(ZSF::Z, self.registers.b == 0);
+    }
+
     /// Perform a LDI / LDD instruction incrementing by e
     fn load_increment(&mut self, e:i8) {
         // LDI     p.130
@@ -2224,6 +2246,34 @@ impl Z80 {
                 // T-states
                 states
             },
+
+            ZI::OutDecrement => {
+                // OUTD     p.285
+
+                self.out_decrement();
+
+                // T-states
+                16
+            },
+
+            ZI::OutDecrementRepeat => {
+                // OTDR    p.286
+
+                let mut states = 0;
+
+                loop {
+                    self.out_decrement();
+                    if self.registers.b == 0 {
+                        states += 16;
+                        break;
+                    }
+                    states += 21;
+                }
+
+                // T-states
+                states
+            },
+
         }
     }
 

@@ -312,23 +312,22 @@ impl VDP {
             new_frame = true;
         }
 
+        if self.scanline == 0 {
+           // raise internal IRQ flag
+           self.status_register.insert(VDPStatusRegister::VBLANK);
+        }
+
         // check if VDP will generate an interrupt
         let mode2 = VDPRegisterModeControl2::from_bits_truncate(self.registers[1]);
-
         if mode2.contains(VDPRegisterModeControl2::IE0) {
             // interrupt enable bit used 
             // at the completion of the effective area
 
             if self.scanline == 0 {
 
-                // raise internal IRQ flag
-                self.status_register.insert(VDPStatusRegister::VBLANK);
-
                 return (true, new_frame);
             }
         }
-        // lower IRQ
-        self.status_register.remove(VDPStatusRegister::VBLANK);
         return (false, new_frame);
     }
 
@@ -685,7 +684,12 @@ impl VDP {
         self.cw_second_byte = false;
 
         // return status byte
-        self.status_register.bits
+        let status = self.status_register.bits;
+
+        // clear VBLANK
+        self.status_register.remove(VDPStatusRegister::VBLANK);
+
+        status
     }
 
     pub fn write_control_port(&mut self, byte: u8) {
