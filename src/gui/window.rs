@@ -157,11 +157,12 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw emulator stats --
         let text = graphics::Text::new((
-                    format!("{:1.1} fps {:0.0}us {:0.0}us {:0.0}us",
+                    format!("{:1.1} fps {:6.0}us {:6.0}us {:6.0}us {:10}",
                             fps,
                             self.cpu_time.min(),
                             self.cpu_time.mean(),
                             self.cpu_time.max(),
+                            self.gg.cpu.cycles(),
                         ),
                     self.font,
                     14.0));
