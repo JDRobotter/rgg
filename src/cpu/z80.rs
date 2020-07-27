@@ -1993,6 +1993,32 @@ impl Z80 {
                 }
             },
 
+            ZI::RotateRightDecimal => {
+                // RRD  p.222
+
+                let addr = self.registers.HL();
+                // low four bits of (HL) are copied
+                // to low four bits of the accumulator
+                let hlbyte = self.bus_read(addr);
+                let alow = self.registers.a & 0xf0;
+                self.registers.a = alow | (hlbyte & 0x0f);
+
+                // high order four bits of (HL) are copied
+                // to low order four bits of (HL)
+                let hlbyte = hlbyte >> 4;
+
+                // previous content of the low order four bits
+                // of the accumulator are copied to high order four bits
+                // of (HL)
+                let hlbyte = hlbyte | (alow << 4);
+
+                // write new (HL) memory value
+                self.bus_write(addr, hlbyte);
+
+                // T-states
+                18
+            },
+
             ZI::LoadIncrement => {
                 self.load_increment(1);
 
