@@ -119,7 +119,8 @@ impl SystemBus {
             },
             // IO port control
             0x3F => {
-                panic!("not implemented")
+                // not implemented
+                0
             },
             // V counter
             0x7E => {

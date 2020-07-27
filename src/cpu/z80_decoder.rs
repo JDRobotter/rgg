@@ -179,6 +179,7 @@ pub enum Z80Instruction {
     RotateLeft(Z80InstructionLocation),
     RotateRightCarry(Z80InstructionLocation),
     RotateRight(Z80InstructionLocation),
+    RotateRightDecimal,
     ShiftLeftArithmetic(Z80InstructionLocation),
     ShiftRightArithmetic(Z80InstructionLocation),
     ShiftRightLogic(Z80InstructionLocation),
@@ -263,9 +264,10 @@ impl Z80Instruction {
             Z80Instruction::RotateLeft(r)               => format!("rl  {}", r.to_string()),
             Z80Instruction::RotateRightCarry(r)         => format!("rrc {}", r.to_string()),
             Z80Instruction::RotateRight(r)              => format!("rr  {}", r.to_string()),
+            Z80Instruction::RotateRightDecimal          => format!("rrd"),
             Z80Instruction::ShiftLeftArithmetic(r)      => format!("sla {}", r.to_string()),
             Z80Instruction::ShiftRightArithmetic(r)     => format!("sra {}", r.to_string()),
-            Z80Instruction::ShiftRightLogic(r)        => format!("srl {}", r.to_string()),
+            Z80Instruction::ShiftRightLogic(r)          => format!("srl {}", r.to_string()),
 
             Z80Instruction::Exchange(a,b)  => format!("ex {} {}", a.to_string(), b.to_string()),
             Z80Instruction::ExchangeX       => format!("exx"),
@@ -1171,6 +1173,8 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0x0F)           { Some(ZI::RotateRightCarry(ZIL::RegisterA)) }
         else if self.match_byte(0x17)           { Some(ZI::RotateLeft(ZIL::RegisterA)) }
         else if self.match_byte(0x1F)           { Some(ZI::RotateRight(ZIL::RegisterA)) }
+
+        else if self.match_bytes(&[0xED,0x67])  { Some(ZI::RotateRightDecimal) }
 
         // Z80 manual table 14, bit operations
         else if self.match_special(&[ZIB::Byte(0xCB), ZIB::Placeholder]) {
