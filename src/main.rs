@@ -26,6 +26,10 @@ fn main() -> GameResult {
                             .help("ROM file to run")
                             .required(true)
                             .index(1))
+                    .arg(Arg::with_name("pause")
+                            .short("p")
+                            .help("start emulator paused")
+                            )
                     .get_matches();
 
 
@@ -37,6 +41,7 @@ fn main() -> GameResult {
     let rom = memory::Rom::open(rom_filename)?;
     println!("[+] loaded ROM is {} bytes", rom.size());
  
+    let pause = matches.occurrences_of("pause") > 0;
 
     let rsrc_dir = if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let mut path = path::PathBuf::from(manifest_dir);
@@ -76,7 +81,7 @@ fn main() -> GameResult {
     let gg = system::GameGear::new(rom);
 
     // instanciate an emulator window
-    let mut emu_window = gui::EmulatorWindow::new(&mut ctx, gg)?;
+    let mut emu_window = gui::EmulatorWindow::new(&mut ctx, gg, !pause)?;
 
     // run window
     event::run(&mut ctx, &mut event_loop, &mut emu_window)
