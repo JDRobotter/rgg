@@ -52,6 +52,8 @@ fn main() -> GameResult {
         path::PathBuf::from("./resources")
     };
 
+    // do not use WINIT backend
+    std::env::set_var("WINIT_UNIX_BACKEND", "x11");
 
     let (mut ctx, mut event_loop) = ContextBuilder::new("RGG", "RGG")
                                         .add_resource_path(rsrc_dir)

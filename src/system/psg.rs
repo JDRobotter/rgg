@@ -57,7 +57,7 @@ impl PSG {
     }
 
     pub fn synchronize_timing(&mut self, ncycle:i64) {
-        self.audio_synth.push(ASC::new(ncycle, ASA::SyncTiming))
+        self.audio_synth.push(ASC::new(ncycle, ASA::SyncTiming(0)))
     }
 
     pub fn write(&mut self, byte: u8, ncycle:i64) {
