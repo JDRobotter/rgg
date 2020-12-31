@@ -10,6 +10,8 @@ use std::sync::mpsc;
 
 use crate::cpu::Z80;
 
+use std::time::Instant;
+
 pub struct LFSR {
     register: u16,
     state: bool,
@@ -107,7 +109,7 @@ impl NoiseGeneratorParameters {
 
 #[derive(Copy,Clone,Debug)]
 pub enum AudioSynthAction {
-    SyncTiming,
+    SyncTiming(i64),
     SetToneActive(usize, bool),
     SetToneAmplitude(usize, f64),
     SetToneFrequency(usize, f64),
@@ -119,7 +121,8 @@ use AudioSynthAction as ASA;
 
 #[derive(Copy,Clone)]
 pub struct AudioSynthCommand {
-    cycle: i64,
+    timestamp: Instant,
+    z80_cycle: i64,
     action: AudioSynthAction,
 }
 
@@ -127,7 +130,8 @@ impl AudioSynthCommand {
 
     pub fn new(cycle: i64, action: AudioSynthAction) -> AudioSynthCommand {
         AudioSynthCommand {
-            cycle: cycle,
+            timestamp: Instant::now(),
+            z80_cycle: cycle,
             action: action,
         }
     }
@@ -167,9 +171,8 @@ impl AudioSynthGenerator {
         }
     }
 
-    fn apply_action(&mut self, action:AudioSynthAction, cycle:i64) {
+    fn apply_action(&mut self, action:AudioSynthAction, cpu_cycle:i64) {
         match action {
-            ASA::SyncTiming =>           { self.sync_timing(cycle); }
             ASA::SetToneActive(n,b) =>      { self.tone_generators[n].active = b; },
             ASA::SetToneAmplitude(n,v) =>   { self.tone_generators[n].amplitude = v; },
             ASA::SetToneFrequency(n,f) =>   { self.tone_generators[n].frequency = f; },
@@ -179,6 +182,7 @@ impl AudioSynthGenerator {
                 self.noise_generator.frequency = f;
                 self.noise_generator.coupled = b;
             },
+            _ => {},
         }
     }
 
@@ -195,39 +199,55 @@ impl AudioSynthGenerator {
         (4.0*y) / std::f64::consts::PI
     }
 
-    fn sync_timing(&mut self, cycles:i64) {
-        let audio_time_us = 1_000_000 * self.sample_time_sps / self.sample_rate_hz;
-        let time_us = 1_000_000 * cycles / Z80::clock_frequency_hz();
-
-        self.sync_timing_us = Some(audio_time_us - time_us);
-    }
-
     fn pop_commands(&mut self) {
 
-        // convert to audio time in us
+        // current audio time in microseconds
         let audio_time_us = 1_000_000 * self.sample_time_sps / self.sample_rate_hz;
+
         loop {
             // pop next command if needed
             if self.next_command.is_none() {
                 self.next_command = self.queue.try_recv().ok();
             }
 
-            // execute next command when scheduleded
+            // execute next command when scheduled
             if let Some(command) = self.next_command {
-                // time in CPU cycles at which command was emited
-                let rcycle = command.cycle;
-                // convert to time in microseconds
-                let time_us = 1_000_000 * rcycle / Z80::clock_frequency_hz();
 
-                let dt = (audio_time_us - time_us) - self.sync_timing_us.unwrap_or(0);
-                if dt > 0 {
-                    self.apply_action(command.action, command.cycle);
-                    // reset command
-                    self.next_command = None
+                // CPU time in microseconds
+                let cpu_time_us = 1_000_000 * command.z80_cycle / Z80::clock_frequency_hz();
+
+                // synchronisation action is not scheduled and executed ASAP
+                if let ASA::SyncTiming(audio_cycle) = command.action {
+                    // compute time it took to unpack queue
+                    let unpack_time_us = command.timestamp.elapsed().as_micros() as i64;
+                    // correct audio time to estimate what time is was when action was pushed
+                    let push_audio_time_us = audio_time_us - unpack_time_us;
+
+                    // compute latency between audio thread clock and Z80 cpu clock
+                    self.sync_timing_us = Some(push_audio_time_us - cpu_time_us);
+
+                    // clear next command
+                    self.next_command = None;
                 }
                 else {
-                    // next command is not scheduled to apply now
-                    return;
+
+                    // time in CPU cycles at which command was emited
+                    let cpu_cycle = command.z80_cycle;
+                    // convert to time in microseconds
+                    let cpu_time_us = 1_000_000 * cpu_cycle / Z80::clock_frequency_hz();
+
+                    let dt_us = (audio_time_us - cpu_time_us) - self.sync_timing_us.unwrap_or(0);
+
+                    // execute audio commands with a 5ms latency
+                    if dt_us > 5000 {
+                        self.apply_action(command.action, command.z80_cycle);
+                        // reset command
+                        self.next_command = None
+                    }
+                    else {
+                        // next command is not scheduled to apply now
+                        return;
+                    }
                 }
             }
             else {
@@ -281,7 +301,7 @@ impl AudioSynthGenerator {
         */
 
         // general gain
-        sample *= 0.6;
+        sample *= 0.1;
 
         sample as i16
     }

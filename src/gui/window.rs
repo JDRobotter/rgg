@@ -31,7 +31,7 @@ pub struct EmulatorWindow {
 
 impl EmulatorWindow {
     
-    pub fn new(ctx: &mut Context, gg: GameGear) -> GameResult<EmulatorWindow> {
+    pub fn new(ctx: &mut Context, gg: GameGear, start_immediately:bool) -> GameResult<EmulatorWindow> {
 
 
         let font = graphics::Font::new(ctx, "/DejaVuSansMono.ttf")?;
@@ -46,7 +46,7 @@ impl EmulatorWindow {
         Ok(EmulatorWindow {
             gg: gg,
             font:font,
-            running: true,
+            running: start_immediately,
             run_one: false,
             ram_watchers: watchers,
             cpu_time: ScalarStatistics::new(5*60),
@@ -90,9 +90,9 @@ impl event::EventHandler for EmulatorWindow {
             KeyCode::Down => self.gg.set_button_state(JoyButton::Down, false),
             KeyCode::Left => self.gg.set_button_state(JoyButton::Left, false),
             KeyCode::Right => self.gg.set_button_state(JoyButton::Right, false),
-            KeyCode::Y => self.gg.set_button_state(JoyButton::Start, false),
-            KeyCode::U => self.gg.set_button_state(JoyButton::A, false),
-            KeyCode::J => self.gg.set_button_state(JoyButton::B, false),
+            KeyCode::E => self.gg.set_button_state(JoyButton::Start, false),
+            KeyCode::A => self.gg.set_button_state(JoyButton::A, false),
+            KeyCode::Z => self.gg.set_button_state(JoyButton::B, false),
             _ => {},
         }
     }
@@ -103,9 +103,9 @@ impl event::EventHandler for EmulatorWindow {
             KeyCode::Down => self.gg.set_button_state(JoyButton::Down, true),
             KeyCode::Left => self.gg.set_button_state(JoyButton::Left, true),
             KeyCode::Right => self.gg.set_button_state(JoyButton::Right, true),
-            KeyCode::Y => self.gg.set_button_state(JoyButton::Start, true),
-            KeyCode::U => self.gg.set_button_state(JoyButton::A, true),
-            KeyCode::J => self.gg.set_button_state(JoyButton::B, true),
+            KeyCode::E=> self.gg.set_button_state(JoyButton::Start, true),
+            KeyCode::A => self.gg.set_button_state(JoyButton::A, true),
+            KeyCode::Z => self.gg.set_button_state(JoyButton::B, true),
 
             KeyCode::Space => { self.running = !self.running },
             KeyCode::S => { self.run_one = true },
@@ -157,7 +157,7 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw emulator stats --
         let text = graphics::Text::new((
-                    format!("{:1.1} fps {:6.0}us {:6.0}us {:6.0}us {:10}",
+                    format!("FPS: {:1.1} CPU: ({:6.0}us {:6.0}us {:6.0}us) {:10}",
                             fps,
                             self.cpu_time.min(),
                             self.cpu_time.mean(),
@@ -338,7 +338,6 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw GG sprite table --
         //
-        /*
         let bx = sw + 40.0 + 16.0*8.0 + 10.0;
         let by = 350.0;
         for py in 0..12 {
@@ -379,7 +378,6 @@ impl event::EventHandler for EmulatorWindow {
                                     r,
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
-        */
 
         /*
         // -- draw RAM --
