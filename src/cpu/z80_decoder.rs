@@ -179,6 +179,12 @@ pub enum Z80Instruction {
     RotateLeft(Z80InstructionLocation),
     RotateRightCarry(Z80InstructionLocation),
     RotateRight(Z80InstructionLocation),
+
+    RotateLeftCarryA,
+    RotateLeftA,
+    RotateRightCarryA,
+    RotateRightA,
+
     RotateRightDecimal,
     ShiftLeftArithmetic(Z80InstructionLocation),
     ShiftRightArithmetic(Z80InstructionLocation),
@@ -264,6 +270,10 @@ impl Z80Instruction {
             Z80Instruction::RotateLeft(r)               => format!("rl  {}", r.to_string()),
             Z80Instruction::RotateRightCarry(r)         => format!("rrc {}", r.to_string()),
             Z80Instruction::RotateRight(r)              => format!("rr  {}", r.to_string()),
+            Z80Instruction::RotateLeftCarryA            => format!("rlca"),
+            Z80Instruction::RotateLeftA                 => format!("rla"),
+            Z80Instruction::RotateRightCarryA           => format!("rrca"),
+            Z80Instruction::RotateRightA                => format!("rra"),
             Z80Instruction::RotateRightDecimal          => format!("rrd"),
             Z80Instruction::ShiftLeftArithmetic(r)      => format!("sla {}", r.to_string()),
             Z80Instruction::ShiftRightArithmetic(r)     => format!("sra {}", r.to_string()),
@@ -1169,10 +1179,10 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xFF) { Some(ZI::Restart(0x38)) }
 
         // Z80 rotate and shift, specialized register A opcodes
-        else if self.match_byte(0x07)           { Some(ZI::RotateLeftCarry(ZIL::RegisterA)) }
-        else if self.match_byte(0x0F)           { Some(ZI::RotateRightCarry(ZIL::RegisterA)) }
-        else if self.match_byte(0x17)           { Some(ZI::RotateLeft(ZIL::RegisterA)) }
-        else if self.match_byte(0x1F)           { Some(ZI::RotateRight(ZIL::RegisterA)) }
+        else if self.match_byte(0x07)           { Some(ZI::RotateLeftCarryA) }
+        else if self.match_byte(0x0F)           { Some(ZI::RotateRightCarryA) }
+        else if self.match_byte(0x17)           { Some(ZI::RotateLeftA) }
+        else if self.match_byte(0x1F)           { Some(ZI::RotateRightA) }
 
         else if self.match_bytes(&[0xED,0x67])  { Some(ZI::RotateRightDecimal) }
 

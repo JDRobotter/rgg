@@ -19,9 +19,9 @@ bitflags! {
     struct Z80StatusFlags: u8 {
         const S =   0b1000_0000;
         const Z =   0b0100_0000;
-        // unused     0010_0000
+        const B5 =  0b0010_0000;
         const H =   0b0001_0000;
-        // unused     0000_1000
+        const B3 =  0b0000_1000;
         const PV =  0b0000_0100;
         const N =   0b0000_0010;
         const C =   0b0000_0001;
@@ -72,7 +72,7 @@ struct Z80Registers {
 impl Z80Registers {
     pub fn new() -> Z80Registers {
         Z80Registers {
-            flags: Z80StatusFlags::empty(),
+            flags: Z80StatusFlags::all(),
             a: 0, b: 0, d:0, h:0,
             c: 0, e:0, l:0,
             iv: 0, mr: 0, sp:0,
@@ -155,13 +155,15 @@ pub struct Z80 {
     // CPU intruction decoder
     decoder: Z80InstructionDecoder,
 
-    // last decoded instruction address
+    // last decoded instruction address in CPU space (PC)
     last_decoded_address: u16,
+    // last decoded instruction address in ROM space
+    last_decoded_rom_address: usize,
     // last decoded instruction
     last_decoded_instruction: Z80Instruction,
 
     // breakpoint address
-    breakpoint_addresses: Vec<u16>,
+    breakpoint_addresses: Vec<usize>,
 
     // number of cycles
     ncycles: i64,
@@ -181,6 +183,7 @@ impl Z80 {
             decoder: Z80InstructionDecoder::new(),
 
             last_decoded_address: 0,
+            last_decoded_rom_address: 0,
             last_decoded_instruction: Z80Instruction::NOP,
 
 
@@ -225,9 +228,15 @@ impl Z80 {
 
     /// Return last decoded instruction dissassembly debug string
     pub fn dissassembly_debug_string(&self) -> String {
-      format!("{:04x}: {:16}",
-          self.last_decoded_address,
-          self.last_decoded_instruction.to_string())
+
+        // CPU address space
+        let lda = self.last_decoded_address;
+        // ROM address space
+        let ldra = self.last_decoded_rom_address;
+
+        format!("{:04x}:{:04x}: {:16}",
+            lda, ldra,
+            self.last_decoded_instruction.to_string())
     }
 
     /// Return cpu registers debug string
@@ -241,14 +250,16 @@ impl Z80 {
     }
 
     /// Set CPU PC breakpoint
-    pub fn set_breakpoint(&mut self, addr:u16) {
+    pub fn set_breakpoint(&mut self, addr:usize) {
         self.breakpoint_addresses.push(addr);
     }
 
     /// Step CPU by one instruction, return true on breakpoint
     pub fn step(&mut self) -> bool {
 
-        self.last_decoded_address = self.registers.pc;
+        let pc = self.registers.pc;
+        self.last_decoded_address = pc;
+        self.last_decoded_rom_address = self.bus.map_rom_bank_address(pc);
 
         loop {
 
@@ -261,11 +272,6 @@ impl Z80 {
             match self.decoder.push(opb) {
                 Some(ins) => {
                     
-                    /*
-                    println!("{:04x}: {:16}",
-                          self.last_decoded_address,
-                          ins.to_string());
-                    */
                     // execute decoded instruction
                     let tstates = self.execute_instruction(ins);
                     
@@ -286,7 +292,7 @@ impl Z80 {
         }//loop
  
         // test breakpoint
-        self.breakpoint_addresses.contains(&self.registers.pc)
+        self.breakpoint_addresses.contains(&self.last_decoded_rom_address)
     }
 
     fn bus_read(&self, addr:u16) -> u8 {
@@ -356,7 +362,7 @@ impl Z80 {
     }
 
     fn read_AND_operand(&self,
-                                op:Z80InstructionLocation) -> u8 {
+                            op:Z80InstructionLocation) -> u8 {
         match op {
             ZIL::Immediate(b) => { b },
             ZIL::RegisterA => { self.registers.a },
@@ -1833,6 +1839,37 @@ impl Z80 {
                 }
             },
 
+            ZI::RotateLeftCarryA => {
+                // RLCA  p.205
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.registers.a;
+
+                // bit 7 will be shoved back to bit 0 after shift
+                let bit7 = byte & 0x80;
+                // store rotated bit in carry
+                self.registers.flags.set(ZSF::C, bit7 != 0);
+                // shift left
+                byte = byte << 1;
+                // shove rotated bit in position 0
+                byte = byte | if bit7 == 0 { 0x00 } else { 0x01 };
+
+                // write byte back
+                self.registers.a = byte;
+
+                // update flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, false);
+                // half-carry
+                self.registers.flags.set(ZSF::H, false);
+                // sign, zero and overflow are not affected
+
+                // T-states
+                4
+            },
+
+
             ZI::RotateLeftCarry(opv) => {
                 // RLC  p.213
                 // ...
@@ -1871,7 +1908,37 @@ impl Z80 {
                     ZIL::IndexedIY(_) => { 23 },
                     _ => { 8 },
                 }
-            }
+            },
+
+            ZI::RotateLeftA => {
+                // RLA  p.207
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.registers.a;
+
+                // carry will be pushed to bit 0
+                let carry = self.registers.flags.contains(ZSF::C);
+                // bit 7 will be pushed to carry after shift
+                self.registers.flags.set(ZSF::C, (byte & 0x80) != 0);
+                // shift left
+                byte = byte << 1;
+                // shove rotated bit in position 0
+                byte = byte | if carry { 0x01 } else { 0x00 };
+
+                // write byte back
+                self.registers.a = byte;
+
+                // update flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, false);
+                // half-carry
+                self.registers.flags.set(ZSF::H, false);
+                // sign, zero and overflow are not affected
+
+                // T-states
+                4
+            },
 
             ZI::RotateLeft(opv) => {
                 // RL  p.221
@@ -1913,6 +1980,37 @@ impl Z80 {
                 }
             },
 
+            ZI::RotateRightCarryA => {
+                // RRCA  p.209
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.registers.a;
+
+                // bit 0 will be shoved back to bit 7 after shift
+                let bit0 = byte & 0x01;
+                // store rotated bit in carry
+                self.registers.flags.set(ZSF::C, bit0 != 0);
+                // shift right
+                byte = byte >> 1;
+                // shove rotated bit in position 7
+                byte = byte | if bit0 == 0 { 0x00 } else { 0x80 };
+
+                // write byte back
+                self.registers.a = byte;
+
+                // update flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, false);
+                // half-carry
+                self.registers.flags.set(ZSF::H, false);
+                // sign, zero and overflow are not affected
+
+                // T-states
+                4
+            },
+
+
             ZI::RotateRightCarry(opv) => {
                 // RRC  p.224
                 // ...
@@ -1951,7 +2049,37 @@ impl Z80 {
                     ZIL::IndexedIY(_) => { 23 },
                     _ => { 8 },
                 }
-            }
+            },
+
+            ZI::RotateRightA => {
+                // RRA  p.211
+                // ...
+
+                // read byte pointed by operand
+                let mut byte = self.registers.a;
+
+                // carry will be pushed to bit 7
+                let carry = self.registers.flags.contains(ZSF::C);
+                // bit 0 will be pushed to carry after shift
+                self.registers.flags.set(ZSF::C, (byte & 0x01) != 0);
+                // shift right
+                byte = byte >> 1;
+                // shove rotated bit in position 7
+                byte = byte | if carry { 0x80 } else { 0x00 };
+
+                // write byte back
+                self.registers.a = byte;
+
+                // update flags
+                // add/sub
+                self.registers.flags.set(ZSF::N, false);
+                // half-carry
+                self.registers.flags.set(ZSF::H, false);
+                // sign, zero and overflow are not affected
+
+                // T-states
+                4
+            },
 
             ZI::RotateRight(opv) => {
                 // RR  p.227
