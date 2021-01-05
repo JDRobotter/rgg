@@ -17,6 +17,9 @@ pub struct PSG {
     latched_byte: u8,
 
     latched_tone_generator_registers: [ToneGeneratorRegister; 3],
+
+    // debug breakpoint latch
+    will_break: bool,
 }
 
 impl PSG {
@@ -28,6 +31,18 @@ impl PSG {
             latched_byte: 0,
 
             latched_tone_generator_registers: [ToneGeneratorRegister {divider:0, attenuation:0}; 3],
+
+            will_break: false,
+        }
+    }
+
+    pub fn will_break(&mut self) -> bool {
+        if self.will_break {
+            self.will_break = false;
+            true
+        }
+        else {
+            false
         }
     }
 
@@ -103,6 +118,9 @@ impl PSG {
         else if ra == 3 {
             // noise register
             
+            // writing to noise register, reset internal state
+            self.audio_synth.push(ASC::new(ncycle, ASA::ResetNoiseRegister));
+
             match byte & 0x03 {
                 0x00 => {
                     self.audio_synth.push(ASC::new(ncycle,

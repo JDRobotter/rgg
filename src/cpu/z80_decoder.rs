@@ -958,10 +958,10 @@ impl Z80InstructionDecoder {
         else if self.match_byte(0xA5) { Some(ZI::And(ZIL::RegisterL)) }
         else if self.match_byte(0xA6) { Some(ZI::And(ZIL::RegisterIndirectHL)) }
         else if self.match_special(&[ZIB::Byte(0xDD), ZIB::Byte(0xA6), ZIB::Placeholder]) {
-            Some(ZI::Add(ZIL::IndexedIX(self.matched_value(0))))
+            Some(ZI::And(ZIL::IndexedIX(self.matched_value(0))))
         }
         else if self.match_special(&[ZIB::Byte(0xFD), ZIB::Byte(0xA6), ZIB::Placeholder]) {
-            Some(ZI::Add(ZIL::IndexedIY(self.matched_value(0))))
+            Some(ZI::And(ZIL::IndexedIY(self.matched_value(0))))
         }
         else if self.match_special(&[ZIB::Byte(0xE6), ZIB::Placeholder]) {
             Some(ZI::And(ZIL::Immediate(self.matched_value(0))))
