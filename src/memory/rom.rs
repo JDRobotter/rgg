@@ -30,7 +30,7 @@ impl Rom {
                 *pb
             },
             None => {
-                panic!("out of bounds access in ROM");
+                panic!("out of bounds access in ROM ({:08x})", addr);
             }
         }
     }

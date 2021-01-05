@@ -25,21 +25,7 @@ impl GameGear {
 
     pub fn new(rom: Rom) -> GameGear {
 
-        let cpu = Z80::new(rom);
-
-/*
-        cpu.set_breakpoint(0x2b89);
-        cpu.set_breakpoint(0x2b07);
-        cpu.set_breakpoint(0x2af7);
-        cpu.set_breakpoint(0x2ae8);
-        cpu.set_breakpoint(0x2a9e);
-        cpu.set_breakpoint(0x1981);
-*/
-        //cpu.set_breakpoint(0x2ad4);
-        //cpu.set_breakpoint(0x27e);
-        //cpu.set_breakpoint(0x2b03);
-        //cpu.set_breakpoint(0x33d5);
-        //cpu.set_breakpoint(0x2FB4);
+        let mut cpu = Z80::new(rom);
 
         GameGear {
             cpu: cpu,
@@ -78,8 +64,10 @@ impl GameGear {
         let mut new_frame = false;
         let mut will_break = self.cpu.step();
 
-        // VDP may trigger a breakpoint
+        // bus, VDP or PSG may trigger a breakpoint
+        will_break |= self.cpu.bus.will_break();
         will_break |= self.cpu.bus.vdp.will_break();
+        will_break |= self.cpu.bus.psg.will_break();
 
         // push last decoded instruction to debug
         let ass = self.cpu.dissassembly_debug_string();

@@ -46,13 +46,16 @@ impl RomMapper {
         self.mux = mux
     }
 
-    fn read(&self, rom: &Rom, iaddr: u16) -> u8 {
+    fn map_address(&self, iaddr: u16) -> usize {
         // mask address to 16k
         let addr = iaddr & 0x3fff;
         // prepend mux selection address
-        let addr:usize = (addr as usize) | ( (self.mux as usize) << 14 );
-        // read from rom
-        rom.read(addr)
+        (addr as usize) | ( (self.mux as usize) << 14 )
+    }
+
+    fn read(&self, rom: &Rom, iaddr: u16) -> u8 {
+        // read from rom using mapped address
+        rom.read(self.map_address(iaddr))
     }
 }
 
@@ -68,6 +71,9 @@ pub struct SystemBus {
     pub vdp: VDP,
     pub psg: PSG,
     pub joystick: Joystick,
+
+    will_break: bool,
+
 }
 
 impl SystemBus {
@@ -83,10 +89,20 @@ impl SystemBus {
             bank2_mapper: RomMapper::new(0x02),
 
             vdp: VDP::new(),
-
             psg: PSG::new(),
-
             joystick: Joystick::new(),
+
+            will_break: false,
+        }
+    }
+
+    pub fn will_break(&mut self) -> bool {
+        if self.will_break {
+            self.will_break = false;
+            true
+        }
+        else {
+            false
         }
     }
 
@@ -209,6 +225,24 @@ impl SystemBus {
             _ => {
                 println!("IO write to unknown address: {:02x}", addr)
             }
+        }
+    }
+
+    pub fn map_rom_bank_address(&self, addr:u16) -> usize {
+        if addr <= 0x3fff {
+            // ROM bank 0
+            self.bank0_mapper.map_address(addr)
+        }
+        else if addr <= 0x7fff {
+            // ROM bank 1
+            self.bank1_mapper.map_address(addr - 0x4000)
+        }
+        else if addr <= 0xbfff {
+            // ROM bank 2
+            self.bank2_mapper.map_address(addr - 0x8000)
+        }
+        else {
+            panic!("cannot map bank address over 0xc000");
         }
     }
 

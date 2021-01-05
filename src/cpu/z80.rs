@@ -73,10 +73,10 @@ impl Z80Registers {
     pub fn new() -> Z80Registers {
         Z80Registers {
             flags: Z80StatusFlags::all(),
-            a: 0, b: 0, d:0, h:0,
-            c: 0, e:0, l:0,
+            a: 0xff, b: 0xff, d: 0xff, h: 0xff,
+            c: 0xff, e: 0xff, l: 0xff,
             iv: 0, mr: 0, sp:0,
-            ix:0, iy: 0,
+            ix: 0xff, iy: 0xff,
             pc: 0,
         }
     }
@@ -1405,8 +1405,13 @@ impl Z80 {
                 //
                 // CY <- /CY
 
+                // previous carry is copied to H flag
+                let c = self.registers.flags.contains(ZSF::C);
+                self.registers.flags.set(ZSF::H, c);
                 // status register carry flag is inverted
                 self.registers.flags.toggle(ZSF::C);
+                // add/sub flag is reset
+                self.registers.flags.remove(ZSF::N);
 
                 // T-states
                 4
@@ -1417,6 +1422,10 @@ impl Z80 {
                 //
                 // CY <- 1
 
+                // H flag is reset
+                self.registers.flags.remove(ZSF::H);
+                // N flag is reset
+                self.registers.flags.remove(ZSF::N);
                 // status register carry flag is set
                 self.registers.flags.insert(ZSF::C);
 

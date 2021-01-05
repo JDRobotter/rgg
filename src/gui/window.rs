@@ -37,12 +37,8 @@ impl EmulatorWindow {
         let font = graphics::Font::new(ctx, "/DejaVuSansMono.ttf")?;
 
         let watchers = vec![
-            RamWatcher { addr: 0xd3fe, name: "sonic X".to_string() },
-            RamWatcher { addr: 0xd401, name: "sonic Y".to_string() },
-            RamWatcher { addr: 0xd2cf, name: "timer mins".to_string() },
-            RamWatcher { addr: 0xd2d0, name: "timer secs".to_string() },
-            RamWatcher { addr: 0xd2d1, name: "timer frames".to_string() },
         ];
+
         Ok(EmulatorWindow {
             gg: gg,
             font:font,
@@ -155,14 +151,20 @@ impl event::EventHandler for EmulatorWindow {
         //
         graphics::clear(ctx, Color::new(0.1,0.1,0.1,1.0));
 
+        // -- computing screen size --
+        // game gear screen is 4:3 but screen is 160x144
+        // so we stretch screen by 1.2x1.0
+        let sf = 3.5;
+        let sw = 160.0*1.2*sf;
+        let sh = 144.0*1.0*sf;
+
         // -- draw emulator stats --
         let text = graphics::Text::new((
-                    format!("FPS: {:1.1} CPU: ({:6.0}us {:6.0}us {:6.0}us) {:10}",
+                    format!("FPS: {:1.1} CPU: ({:6.0}us {:6.0}us {:6.0}us)",
                             fps,
                             self.cpu_time.min(),
                             self.cpu_time.mean(),
                             self.cpu_time.max(),
-                            self.gg.cpu.cycles(),
                         ),
                     self.font,
                     14.0));
@@ -171,8 +173,6 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw GG LCD screen --
         // draw border
-        let sw = 160.0*4.0;
-        let sh = 144.0*4.0;
         let r = graphics::Rect::new(20.0, 20.0, sw+2.0, sh+2.0);
         let rlcd = graphics::Mesh::new_rectangle(ctx,
                                     graphics::DrawMode::stroke(2.0),
@@ -198,11 +198,13 @@ impl event::EventHandler for EmulatorWindow {
             }
         }
 
+
+        // scale factor
         let im = graphics::Image::from_rgba8(ctx, 160, 144, &rgba)?;
         graphics::draw(ctx, &im, 
             graphics::DrawParam::new()
                 .dest(cgmath::Point2::new(21.0, 21.0))
-                .scale(cgmath::Vector2::new(4.0, 4.0)))?;
+                .scale(cgmath::Vector2::new(1.2*sf, sf)))?;
 
         // -- draw VDP tiles pattern numbers overlay --
         /*
@@ -238,6 +240,7 @@ impl event::EventHandler for EmulatorWindow {
         let xy = cgmath::Point2::new(20.0, sh + 40.0);
         graphics::draw(ctx, &text, (xy,))?;
 
+        /*
         // -- draw watchers values --
         for (idx,rw) in self.ram_watchers.iter().enumerate() {
             
@@ -254,6 +257,7 @@ impl event::EventHandler for EmulatorWindow {
             let xy = cgmath::Point2::new(sw + 20.0, sh + 40.0 + mf*18.0);
             graphics::draw(ctx, &text, (xy,))?;
         }
+        */
         
         // -- draw GG VDP palettes --
         //
@@ -379,7 +383,6 @@ impl event::EventHandler for EmulatorWindow {
                                     graphics::WHITE)?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
-        /*
         // -- draw RAM --
         let bx = sw + 40.0;
         let by = 500.0;
@@ -405,7 +408,6 @@ impl event::EventHandler for EmulatorWindow {
             graphics::DrawParam::new()
                 .dest(cgmath::Point2::new(bx,by))
                 .scale(cgmath::Vector2::new(2.0,2.0)))?;
-        */
 
         graphics::present(ctx)
     }

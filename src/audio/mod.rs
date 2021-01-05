@@ -11,11 +11,13 @@ use std::sync::mpsc;
 use crate::cpu::Z80;
 
 use std::time::Instant;
+use rand::prelude::*;
 
 pub struct LFSR {
     register: u16,
     state: bool,
     output: f64,
+    feedback: bool,
 }
 
 impl LFSR {
@@ -24,34 +26,41 @@ impl LFSR {
             register: 0x8000,
             state: false,
             output: 0.0,
+            feedback: false,
         }
     }
 
-    fn parity(inr:u16) -> bool {
-        let inr = inr ^ (inr >> 8);
-        let inr = inr ^ (inr >> 4);
-        let inr = inr ^ (inr >> 2);
-        let inr = inr ^ (inr >> 1);
-        (inr & 1) != 0
+    fn set_feedback(&mut self, b:bool) {
+        self.feedback = b;
     }
 
     pub fn reset(&mut self) {
         self.register = 0x8000;
     }
 
-    pub fn output(&self) -> f64 {
-        self.output
-    }
-
     pub fn shift(&mut self) {
-        // apply feedback on register
-        if LFSR::parity(self.register) {
-            self.register |= 0x8000;
+
+        if self.feedback {
+            // https://www.smspower.org/Development/SN76489?from=Development.PSG
+            // For the SMS (1 and 2), Genesis and Game Gear,
+            // the tapped bits are bits 0 and 3 ($0009), fed back into bit 15.
+
+            let b0: bool = self.register & (1<<0) != 0;
+            let b3: bool = self.register & (1<<3) != 0;
+            let nb = b0 ^ b3;
+
+            // fed bit back to register
+            self.register = if nb { 0x8000 } else {0x0000} | self.register >> 1;
+        
+            self.output = if b0 { 1.0 } else { -1.0 };
         }
-        
-        self.output = if self.register & 0x0001 != 0x0000 { 1.0 } else { 0.0 };
-        
-        self.register = self.register >> 1;
+        else {
+            // periodic noise mode
+            let bit0 = self.register & 1;
+            self.register = self.register >> 1 | bit0 << 15;
+
+            self.output = if bit0 != 0 { 1.0 } else { -1.0 };
+        }
     }
 
     fn update(&mut self, x:f64) -> f64 {
@@ -64,6 +73,7 @@ impl LFSR {
             }
         }
         else {
+
             self.state = false;
         }
 
@@ -113,6 +123,7 @@ pub enum AudioSynthAction {
     SetToneActive(usize, bool),
     SetToneAmplitude(usize, f64),
     SetToneFrequency(usize, f64),
+    ResetNoiseRegister,
     SetNoiseAmplitude(f64),
     SetNoiseFrequency(bool, f64),
     SetNoiseFeedback(bool),
@@ -154,11 +165,11 @@ struct AudioSynthGenerator {
 }
 
 impl AudioSynthGenerator {
-    pub fn new(rx:Receiver<AudioSynthCommand>, sample_rate_hz:i64) -> AudioSynthGenerator {
+    pub fn new(rx:Receiver<AudioSynthCommand>, sample_rate_hz:u32) -> AudioSynthGenerator {
         AudioSynthGenerator {
             queue: rx,
 
-            sample_rate_hz: sample_rate_hz,
+            sample_rate_hz: sample_rate_hz as i64,
             sample_time_sps: 0,
 
             tone_generators: [ToneGeneratorParameters::new(); 3],
@@ -173,11 +184,24 @@ impl AudioSynthGenerator {
 
     fn apply_action(&mut self, action:AudioSynthAction, cpu_cycle:i64) {
         match action {
-            ASA::SetToneActive(n,b) =>      { self.tone_generators[n].active = b; },
-            ASA::SetToneAmplitude(n,v) =>   { self.tone_generators[n].amplitude = v; },
-            ASA::SetToneFrequency(n,f) =>   { self.tone_generators[n].frequency = f; },
-            ASA::SetNoiseAmplitude(v) =>    { self.noise_generator.amplitude = v; },
-            ASA::SetNoiseFeedback(b) =>     { self.noise_generator.feedback = b; },
+            ASA::SetToneActive(n,b) =>      {
+                self.tone_generators[n].active = b;
+            },
+            ASA::SetToneAmplitude(n,v) =>   {
+                self.tone_generators[n].amplitude = v;
+            },
+            ASA::SetToneFrequency(n,f) =>   {
+                self.tone_generators[n].frequency = f;
+            },
+            ASA::ResetNoiseRegister => {
+                self.noise_lfsr.reset();
+            },
+            ASA::SetNoiseAmplitude(v) =>    {
+                self.noise_generator.amplitude = v;
+            },
+            ASA::SetNoiseFeedback(b) =>     {
+                self.noise_generator.feedback = b;
+            },
             ASA::SetNoiseFrequency(b,f) =>  {
                 self.noise_generator.frequency = f;
                 self.noise_generator.coupled = b;
@@ -188,7 +212,7 @@ impl AudioSynthGenerator {
 
     fn square(x:f64) -> f64 {
         // use square function Fourier expansion to "soften" the sound
-        const N: usize = 15;
+        const N: usize = 10;
         let mut y = 0.0;
         for k in 0..N {
             const TWO_PI:f64 = 2.0*std::f64::consts::PI;
@@ -287,18 +311,17 @@ impl AudioSynthGenerator {
             }
         }
 
-        //noise generator
-        /*
+        // noise generator
         let nf = if self.noise_generator.coupled {
             self.tone_generators[2].frequency
         }
         else {
             self.noise_generator.frequency
         };
-        let x = nf * self.sample_time;
+        self.noise_lfsr.set_feedback(self.noise_generator.feedback);
+        let x = nf * sample_time;
         let ny = self.noise_generator.amplitude * self.noise_lfsr.update(x % 1.0);
         sample += ny;
-        */
 
         // general gain
         sample *= 0.1;
@@ -320,10 +343,11 @@ impl AudioSynth {
         let device = host
             .default_output_device()
             .expect("failed to find a default audio output device");
-     
+
+        let sample_rate_hz = 44100;
         let format = Format {
             channels: 1,
-            sample_rate: SampleRate(48000),
+            sample_rate: SampleRate(sample_rate_hz),
             data_type: SampleFormat::I16
         };
 
@@ -339,7 +363,7 @@ impl AudioSynth {
         // spawn a thread running cpal event loop
         thread::spawn(move || {
 
-            let mut generator = AudioSynthGenerator::new(rx, 48000);
+            let mut generator = AudioSynthGenerator::new(rx, sample_rate_hz);
 
             event_loop.run(move |stream_id,stream_result| {
                 let stream_data = match stream_result {
