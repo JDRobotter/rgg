@@ -22,7 +22,8 @@ pub struct EmulatorWindow {
     font: graphics::Font,
 
     running: bool,
-    run_one: bool,
+    run_one_step: bool,
+    run_one_frame: bool,
 
     ram_watchers: Vec<RamWatcher>,
 
@@ -43,7 +44,8 @@ impl EmulatorWindow {
             gg: gg,
             font:font,
             running: start_immediately,
-            run_one: false,
+            run_one_step: false,
+            run_one_frame: false,
             ram_watchers: watchers,
             cpu_time: ScalarStatistics::new(5*60),
         })
@@ -104,7 +106,11 @@ impl event::EventHandler for EmulatorWindow {
             KeyCode::Z => self.gg.set_button_state(JoyButton::B, true),
 
             KeyCode::Space => { self.running = !self.running },
-            KeyCode::S => { self.run_one = true },
+            KeyCode::S => { self.run_one_step = true },
+            KeyCode::F => {
+                self.running = true;
+                self.run_one_frame = true;
+            },
             KeyCode::R => { self.gg.reset() },
             _ => {},
         }
@@ -126,7 +132,7 @@ impl event::EventHandler for EmulatorWindow {
                 if breakpoint {
                     // breakpoint reached
                     self.running = false;
-                    self.run_one = false;
+                    self.run_one_step = false;
                 }
 
                 // next frame ready
@@ -134,15 +140,22 @@ impl event::EventHandler for EmulatorWindow {
                     break;
                 }
             }
-            else if self.run_one {
+            else if self.run_one_step {
                 self.gg.step();
-                self.run_one = false;
+                self.run_one_step = false;
                 break;
             }
             else {
                 break;
             }
         }
+
+        // manage frame by frame running mode
+        if self.run_one_frame {
+            self.running = false;
+            self.run_one_frame = false;
+        }
+
         self.cpu_time.update(
             cpu_start.elapsed().as_micros() as f64
         );
