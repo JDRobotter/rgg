@@ -25,7 +25,7 @@ impl GameGear {
 
     pub fn new(rom: Rom) -> GameGear {
 
-        let mut cpu = Z80::new(rom);
+        let cpu = Z80::new(rom);
 
         GameGear {
             cpu: cpu,

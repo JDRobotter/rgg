@@ -1,8 +1,7 @@
 extern crate cpal;
 use cpal::traits::{HostTrait,EventLoopTrait};
-use cpal::{StreamId,StreamDataResult,SampleRate,SampleFormat,Format,StreamData,UnknownTypeOutputBuffer};
+use cpal::{SampleRate,SampleFormat,Format,StreamData,UnknownTypeOutputBuffer};
 
-use std::sync::{Mutex,Arc};
 use std::thread;
 
 use std::sync::mpsc::{Sender, Receiver};
@@ -11,7 +10,6 @@ use std::sync::mpsc;
 use crate::cpu::Z80;
 
 use std::time::Instant;
-use rand::prelude::*;
 
 pub struct LFSR {
     register: u16,
@@ -119,7 +117,7 @@ impl NoiseGeneratorParameters {
 
 #[derive(Copy,Clone,Debug)]
 pub enum AudioSynthAction {
-    SyncTiming(i64),
+    SyncTiming,
     SetToneActive(usize, bool),
     SetToneAmplitude(usize, f64),
     SetToneFrequency(usize, f64),
@@ -182,7 +180,7 @@ impl AudioSynthGenerator {
         }
     }
 
-    fn apply_action(&mut self, action:AudioSynthAction, cpu_cycle:i64) {
+    fn apply_action(&mut self, action:AudioSynthAction) {
         match action {
             ASA::SetToneActive(n,b) =>      {
                 self.tone_generators[n].active = b;
@@ -241,36 +239,38 @@ impl AudioSynthGenerator {
                 let cpu_time_us = 1_000_000 * command.z80_cycle / Z80::clock_frequency_hz();
 
                 // synchronisation action is not scheduled and executed ASAP
-                if let ASA::SyncTiming(audio_cycle) = command.action {
-                    // compute time it took to unpack queue
-                    let unpack_time_us = command.timestamp.elapsed().as_micros() as i64;
-                    // correct audio time to estimate what time is was when action was pushed
-                    let push_audio_time_us = audio_time_us - unpack_time_us;
+                match command.action {
+                    ASA::SyncTiming => {
+                        // compute time it took to unpack queue
+                        let unpack_time_us = command.timestamp.elapsed().as_micros() as i64;
+                        // correct audio time to estimate what time is was when action was pushed
+                        let push_audio_time_us = audio_time_us - unpack_time_us;
 
-                    // compute latency between audio thread clock and Z80 cpu clock
-                    self.sync_timing_us = Some(push_audio_time_us - cpu_time_us);
+                        // compute latency between audio thread clock and Z80 cpu clock
+                        self.sync_timing_us = Some(push_audio_time_us - cpu_time_us);
 
-                    // clear next command
-                    self.next_command = None;
-                }
-                else {
-
-                    // time in CPU cycles at which command was emited
-                    let cpu_cycle = command.z80_cycle;
-                    // convert to time in microseconds
-                    let cpu_time_us = 1_000_000 * cpu_cycle / Z80::clock_frequency_hz();
-
-                    let dt_us = (audio_time_us - cpu_time_us) - self.sync_timing_us.unwrap_or(0);
-
-                    // execute audio commands with a 5ms latency
-                    if dt_us > 5000 {
-                        self.apply_action(command.action, command.z80_cycle);
-                        // reset command
-                        self.next_command = None
+                        // clear next command
+                        self.next_command = None;
                     }
-                    else {
-                        // next command is not scheduled to apply now
-                        return;
+
+                    _ => {
+                        // time in CPU cycles at which command was emited
+                        let cpu_cycle = command.z80_cycle;
+                        // convert to time in microseconds
+                        let cpu_time_us = 1_000_000 * cpu_cycle / Z80::clock_frequency_hz();
+
+                        let dt_us = (audio_time_us - cpu_time_us) - self.sync_timing_us.unwrap_or(0);
+
+                        // execute audio commands with a 5ms latency
+                        if dt_us > 5000 {
+                            self.apply_action(command.action);
+                            // reset command
+                            self.next_command = None
+                        }
+                        else {
+                            // next command is not scheduled to apply now
+                            return;
+                        }
                     }
                 }
             }

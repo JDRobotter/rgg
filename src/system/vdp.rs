@@ -187,7 +187,7 @@ impl Pattern {
 
 /// Sprite attributes
 #[derive(Debug)]
-struct Sprite {
+pub struct Sprite {
     // vertical position
     x: u8,
     // horizontal position
@@ -296,10 +296,6 @@ impl VDP {
         else {
             false
         }
-    }
-
-    pub fn scanline(&self) -> u16 {
-        self.scanline
     }
 
     pub fn step(&mut self) -> (bool,bool) {
@@ -449,6 +445,7 @@ impl VDP {
         }
     }
 
+    #[allow(dead_code)]
     pub fn debug_get_tile_number(&self, x:usize, y:usize) -> u16 {
         self.debug_tiles_matrix[x + 32*y]
     }

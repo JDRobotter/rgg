@@ -10,6 +10,7 @@ use crate::system::GameGear;
 use crate::math::ScalarStatistics;
 use std::time::Instant;
 
+#[allow(dead_code)]
 struct RamWatcher {
     addr: u16,
     name: String,
@@ -25,6 +26,7 @@ pub struct EmulatorWindow {
     run_one_step: bool,
     run_one_frame: bool,
 
+    #[allow(dead_code)]
     ram_watchers: Vec<RamWatcher>,
 
     cpu_time: ScalarStatistics,

@@ -6,7 +6,6 @@ use crate::audio::AudioSynthCommand as ASC;
 #[derive(Clone,Copy)]
 struct ToneGeneratorRegister {
     divider: u16,
-    attenuation: u8,
 }
 
 
@@ -30,7 +29,7 @@ impl PSG {
             audio_synth: AudioSynth::new(),
             latched_byte: 0,
 
-            latched_tone_generator_registers: [ToneGeneratorRegister {divider:0, attenuation:0}; 3],
+            latched_tone_generator_registers: [ToneGeneratorRegister {divider:0}; 3],
 
             will_break: false,
         }
@@ -72,7 +71,7 @@ impl PSG {
     }
 
     pub fn synchronize_timing(&mut self, ncycle:i64) {
-        self.audio_synth.push(ASC::new(ncycle, ASA::SyncTiming(0)))
+        self.audio_synth.push(ASC::new(ncycle, ASA::SyncTiming))
     }
 
     pub fn write(&mut self, byte: u8, ncycle:i64) {
