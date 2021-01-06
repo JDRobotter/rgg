@@ -67,6 +67,8 @@ struct Z80Registers {
     // index registers
     ix: u16,
     iy: u16,
+    // R register
+    r: u8,
 }
 
 impl Z80Registers {
@@ -78,6 +80,7 @@ impl Z80Registers {
             /* NOT IMPLEMENTED iv: 0, mr: 0,*/
             sp:0,
             ix: 0xff, iy: 0xff,
+            r: 0,
             pc: 0,
         }
     }
@@ -129,12 +132,13 @@ impl Z80Registers {
     pub fn to_string(&self) -> String {
         format!("A {:02x}   |B {:02x} |C {:02x} |D {:02x} |E {:02x} |H {:02x} |L {:02x}\n\
                  AF {:04x} |BC {:04x}    |DE {:04x}    |HL {:04x}\n\
-                 PC {:04x} |SP {:04x}    |IX {:04x}    |IY {:04x}\n\
+                 PC {:04x} |SP {:04x} |IX {:04x} |IY {:04x} |R {:02x}\n\
                 {}",
                 self.a, self.b , self.c , self.d,
                          self.e , self.h , self.l,
                 self.AF(), self.BC(), self.DE(), self.HL(),
                 self.pc, self.sp, self.ix, self.iy,
+                self.r,
                 self.flags.to_string())
     }
 }
@@ -273,7 +277,12 @@ impl Z80 {
             // feed byte to instruction decoder
             match self.decoder.push(opb) {
                 Some(ins) => {
-                    
+     
+                    // increment lowest 7 bits of register R
+                    let r = self.registers.r;
+                    let r7 = r & 0x80;
+                    self.registers.r = r7 | ((r+1) & 0x7f);
+
                     // execute decoded instruction
                     let tstates = self.execute_instruction(ins);
                     
@@ -465,10 +474,7 @@ impl Z80 {
             ZIL::RegisterE => { self.registers.e },
             ZIL::RegisterH => { self.registers.h },
             ZIL::RegisterL => { self.registers.l },
-            ZIL::RegisterR => {
-                println!("register R not implemented");
-                0
-            },
+            ZIL::RegisterR => { self.registers.r },
             ZIL::RegisterIndirectBC => {
                 // fetch byte on bus at address pointed by register BC
                 self.bus_read(self.registers.BC())
@@ -2226,7 +2232,7 @@ impl Z80 {
                     ZIL::RegisterH => { self.registers.h = value},
                     ZIL::RegisterL => { self.registers.l = value},
                     ZIL::RegisterR => {
-                        println!("register R not implemented");
+                        self.registers.r = value;
                     },
                     ZIL::RegisterIndirectHL => {
                         // write byte at address pointed by register HL
