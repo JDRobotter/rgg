@@ -110,7 +110,7 @@ impl SystemBus {
         self.psg.synchronize_timing(ncycle)
     }
 
-    pub fn io_read(&mut self, addr:u8, ncycle:i64) -> u8 {
+    pub fn io_read(&mut self, addr:u8, _ncycle:i64) -> u8 {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {

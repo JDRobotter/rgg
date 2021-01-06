@@ -1,5 +1,4 @@
 use std::vec::Vec;
-use std::cmp;
 
 pub struct ScalarStatistics {
     mean: f64,

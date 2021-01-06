@@ -57,9 +57,9 @@ struct Z80Registers {
     e: u8,
     l: u8,
     // interrupt vector
-    iv: u8,
+    /* NOT IMPLEMENTED iv: u8, */
     // memory refresh
-    mr: u8,
+    /* NOT IMPLEMENTED mr: u8, */
     // program counter
     pc: u16,
     // stack pointer
@@ -75,7 +75,8 @@ impl Z80Registers {
             flags: Z80StatusFlags::all(),
             a: 0xff, b: 0xff, d: 0xff, h: 0xff,
             c: 0xff, e: 0xff, l: 0xff,
-            iv: 0, mr: 0, sp:0,
+            /* NOT IMPLEMENTED iv: 0, mr: 0,*/
+            sp:0,
             ix: 0xff, iy: 0xff,
             pc: 0,
         }
@@ -250,6 +251,7 @@ impl Z80 {
     }
 
     /// Set CPU PC breakpoint
+    #[allow(dead_code)]
     pub fn set_breakpoint(&mut self, addr:usize) {
         self.breakpoint_addresses.push(addr);
     }
@@ -698,7 +700,7 @@ impl Z80 {
         // based on
         // https://stackoverflow.com/questions/8034566/overflow-and-carry-flags-on-z80
  
-        let mut carry_out;
+        let carry_out;
 
         // 1111 11
         // 5432 1098 7654 3210

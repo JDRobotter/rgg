@@ -23,8 +23,6 @@ pub enum Z80InstructionLocation {
     RegisterIndirectHL,
     RegisterIndirectBC,
     RegisterIndirectDE,
-    RegisterIndirectIX,
-    RegisterIndirectIY,
     RegisterIndirectSP,
 
     RegisterAF,
@@ -68,8 +66,6 @@ impl Z80InstructionLocation {
             Z80InstructionLocation::RegisterIndirectHL => format!("(HL)"),
             Z80InstructionLocation::RegisterIndirectBC => format!("(BC)"),
             Z80InstructionLocation::RegisterIndirectDE => format!("(DE)"),
-            Z80InstructionLocation::RegisterIndirectIX => format!("(IX)"),
-            Z80InstructionLocation::RegisterIndirectIY => format!("(IY)"),
             Z80InstructionLocation::RegisterIndirectSP => format!("(SP)"),
             Z80InstructionLocation::RegisterAF =>          format!("AF"),
             Z80InstructionLocation::RegisterAFp =>         format!("AF'"),
@@ -302,7 +298,7 @@ impl Z80Instruction {
     }
 }
 
-enum Z80InstructionByte {
+pub enum Z80InstructionByte {
     Byte(u8),
     Placeholder,
 }
