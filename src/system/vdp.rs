@@ -1,6 +1,10 @@
 #![allow(non_snake_case)]
 
 use crate::bits::Bits;
+use crate::memory::MemoryBlock;
+
+use serde_json::{json,Result};
+use serde::{Deserialize,Serialize};
 
 bitflags! {
     struct VDPRegisterModeControl1: u8 {
@@ -52,12 +56,14 @@ bitflags! {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 enum VDPDataPortMux {
     VRAM,
     CRAM,
 }
 
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     struct VDPStatusRegister: u8 {
         const VBLANK =              0b1000_0000;
         const SPRITE_OVERFLOW =     0b0100_0000;
@@ -216,7 +222,7 @@ pub struct VDP {
     cw_buffer: u8,
 
     // internal registers (10 bytes)
-    registers: [u8; 11],
+    registers: MemoryBlock,
 
     // data port address register
     dp_address_register: u16,
@@ -226,7 +232,7 @@ pub struct VDP {
     status_register: VDPStatusRegister,
 
     // video ram (VRAM)
-    vram: [u8; 0x4000],
+    vram: MemoryBlock,
 
     // color ram (CRAM)
     // In Game Gear mode, CRAM has been expanded to 32 words (64 bytes) Each word
@@ -237,7 +243,7 @@ pub struct VDP {
     // R = Red component
     // G = Green component
     // B = Blue component
-    cram: [u8; 64],
+    cram: MemoryBlock,
     // CRAM latched byte
     cram_latch: u8,
 
@@ -264,16 +270,16 @@ impl VDP {
             cw_second_byte: false,
             cw_buffer: 0,
 
-            registers: [0; 11],
+            registers: MemoryBlock::new(11, 0),
 
             dp_address_register: 0,
             dp_read_buffer: 0,
             
             status_register: VDPStatusRegister::empty(),
 
-            vram: [0; 0x4000],
+            vram: MemoryBlock::new(0x4000, 0xff),
 
-            cram: [0; 64],
+            cram: MemoryBlock::new(64, 0xff),
             cram_latch: 0,
 
             data_port_mux: VDPDataPortMux::VRAM,
@@ -286,6 +292,50 @@ impl VDP {
 
             will_break: false,
         }
+    }
+
+    pub fn serialize_state(&self) -> serde_json::Value {
+        json!({
+            "cw_second_byte": self.cw_second_byte,
+            "cw_buffer": self.cw_buffer,
+
+            "registers": self.registers.to_base64(),
+
+            "dp_address_register": self.dp_address_register,
+            "dp_read_buffer": self.dp_read_buffer,
+
+            "status_register": self.status_register,
+
+            "vram": self.vram.to_base64(),
+            "cram": self.cram.to_base64(),
+
+            "cram_latch": self.cram_latch,
+
+            "data_port_mux": self.data_port_mux,
+
+            "scanline": self.scanline,
+        })
+    }
+
+    pub fn restore_state(&mut self, state:&serde_json::Value) {
+        self.cw_second_byte = state["cw_second_byte"].as_bool().unwrap();
+        self.cw_buffer = state["cw_buffer"].as_u64().unwrap() as u8;
+
+        self.registers.from_base64(state["registers"].as_str().unwrap());
+
+        self.dp_address_register = state["dp_address_register"].as_u64().unwrap() as u16;
+        self.dp_read_buffer = state["dp_read_buffer"].as_u64().unwrap() as u8;
+
+        self.status_register = VDPStatusRegister::deserialize(&state["status_register"]).unwrap();
+
+        self.vram.from_base64(state["vram"].as_str().unwrap());
+        self.cram.from_base64(state["cram"].as_str().unwrap());
+
+        self.cram_latch = state["cram_latch"].as_u64().unwrap() as u8;
+
+        self.data_port_mux = VDPDataPortMux::deserialize(&state["data_port_mux"]).unwrap();
+
+        self.scanline = state["scanline"].as_u64().unwrap() as u16;
     }
 
     pub fn will_break(&mut self) -> bool {

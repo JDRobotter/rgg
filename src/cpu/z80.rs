@@ -15,7 +15,11 @@ use Z80JumpCondition as ZJC;
 
 use std::mem;
 
+use serde::{Deserialize,Serialize};
+use serde_json::{json,Result};
+
 bitflags! {
+    #[derive(Serialize, Deserialize)]
     struct Z80StatusFlags: u8 {
         const S =   0b1000_0000;
         const Z =   0b0100_0000;
@@ -44,6 +48,7 @@ impl Z80StatusFlags {
     }
 }
 
+#[derive(Serialize, Deserialize)]
 struct Z80Registers {
     // accumulator
     a: u8,
@@ -157,6 +162,7 @@ pub struct Z80 {
     registers: Z80Registers,
     // CPU alternate registers '
     alternate_registers: Z80Registers,
+
     // CPU intruction decoder
     decoder: Z80InstructionDecoder,
 
@@ -191,11 +197,41 @@ impl Z80 {
             last_decoded_rom_address: 0,
             last_decoded_instruction: Z80Instruction::NOP,
 
-
             breakpoint_addresses: Vec::new(),
 
             ncycles: 0,
         }
+    }
+
+    pub fn serialize_state(&self) -> serde_json::Value {
+        json!({
+            "bus": self.bus.serialize_state(),
+
+            "interrupt_enabled": self.interrupt_enabled,
+            "interrupt_mode": self.interrupt_mode,
+
+            "registers":
+                serde_json::to_value(&self.registers).expect("unable to serialize registers"),
+            "alternate_registers":
+                serde_json::to_value(&self.alternate_registers).expect("unable to serialize alt. reg."),
+
+            "ncycles": self.ncycles,
+
+        })
+
+    }
+
+    pub fn restore_state(&mut self, state:serde_json::Value) {
+
+        self.bus.restore_state(&state["bus"]);
+
+        self.interrupt_enabled = state["interrupt_enabled"].as_bool().unwrap();
+        self.interrupt_mode = state["interrupt_mode"].as_u64().unwrap() as u8;
+
+        self.registers = Z80Registers::deserialize(&state["registers"]).unwrap();
+        self.alternate_registers = Z80Registers::deserialize(&state["alternate_registers"]).unwrap();
+
+        self.ncycles = state["ncycles"].as_i64().unwrap();
     }
 
     pub fn clock_frequency_hz() -> i64 {

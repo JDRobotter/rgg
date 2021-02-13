@@ -1,15 +1,26 @@
 
+use crate::memory::MemoryBlock;
+
 pub struct Ram {
     // allocate 8k RAM
-    data: [u8;8192],
+    data: MemoryBlock,
 }
 
 impl Ram {
 
     pub fn new() -> Ram {
         Ram {
-            data: [0xff;8192],
+            data: MemoryBlock::new(8192,0xff),
         }
+    }
+
+    pub fn serialize_state(&self) -> String {
+        self.data.to_base64()
+    }
+
+    pub fn restore_state(&mut self, state:&serde_json::Value) {
+        let ss = state.as_str().unwrap();
+        self.data.from_base64(ss);
     }
 
     fn check_address_validity(&self, addr:usize) -> bool {

@@ -5,6 +5,9 @@ use crate::system::VDP;
 use crate::system::PSG;
 use crate::system::Joystick;
 
+use serde_json::{json,Result};
+use serde::{Deserialize,Serialize};
+
 bitflags! {
     struct BankControlRegister: u8 {
         const WRITE_PROTECT = 0b1000_0000;
@@ -40,6 +43,16 @@ impl RomMapper {
         RomMapper {
             mux:mux
         }
+    }
+
+    pub fn serialize_state(&self) -> serde_json::Value {
+        json!({
+            "mux": self.mux
+        })
+    }
+
+    pub fn restore_state(&mut self, state: &serde_json::Value) {
+        self.mux = state["mux"].as_u64().unwrap() as u8;
     }
 
     fn set(&mut self, mux:u8) {
@@ -94,6 +107,31 @@ impl SystemBus {
 
             will_break: false,
         }
+    }
+
+    pub fn serialize_state(&self) -> serde_json::Value {
+        json!({
+            "ram": self.work_ram.serialize_state(),
+
+            "bank0_mapper": self.bank0_mapper.serialize_state(),
+            "bank1_mapper": self.bank0_mapper.serialize_state(),
+            "bank2_mapper": self.bank0_mapper.serialize_state(),
+
+            "vdp": self.vdp.serialize_state(),
+            "psg": self.psg.serialize_state(),
+        })
+    }
+
+    pub fn restore_state(&mut self, state: &serde_json::Value) {
+
+        self.work_ram.restore_state(&state["ram"]);
+
+        self.bank0_mapper.restore_state(&state["bank0_mapper"]);
+        self.bank1_mapper.restore_state(&state["bank1_mapper"]);
+        self.bank2_mapper.restore_state(&state["bank2_mapper"]);
+
+        self.vdp.restore_state(&state["vdp"]);
+        self.psg.restore_state(&state["psg"]);
     }
 
     pub fn will_break(&mut self) -> bool {
