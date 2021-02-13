@@ -3,6 +3,10 @@ use crate::audio::AudioSynth;
 use crate::audio::AudioSynthAction as ASA;
 use crate::audio::AudioSynthCommand as ASC;
 
+use serde_json::{json,Result};
+use serde::{Deserialize,Serialize};
+
+#[derive(Serialize, Deserialize)]
 #[derive(Clone,Copy)]
 struct ToneGeneratorRegister {
     divider: u16,
@@ -33,6 +37,20 @@ impl PSG {
 
             will_break: false,
         }
+    }
+
+    pub fn serialize_state(&self) -> serde_json::Value {
+        json!({
+            "latched_byte": self.latched_byte,
+            "latched_tone_generator_registers": self.latched_tone_generator_registers,
+        })
+    }
+
+    pub fn restore_state(&mut self, state:&serde_json::Value) {
+
+        self.latched_byte = state["latched_byte"].as_u64().unwrap() as u8;
+        self.latched_tone_generator_registers
+            = Deserialize::deserialize(&state["latched_tone_generator_registers"]).unwrap();
     }
 
     pub fn will_break(&mut self) -> bool {

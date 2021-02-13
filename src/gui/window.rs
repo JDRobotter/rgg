@@ -114,6 +114,10 @@ impl event::EventHandler for EmulatorWindow {
                 self.run_one_frame = true;
             },
             KeyCode::R => { self.gg.reset() },
+
+            KeyCode::M => { self.gg.save_state(); },
+            KeyCode::L => { self.gg.load_state(); },
+
             _ => {},
         }
     }

@@ -18,6 +18,7 @@ mod gui;
 mod bits;
 mod audio;
 mod math;
+mod utils;
 
 fn main() -> GameResult {
     let matches = App::new("RGG emulator")
@@ -30,6 +31,10 @@ fn main() -> GameResult {
                             .short("p")
                             .help("start emulator paused")
                             )
+                    .arg(Arg::with_name("state")
+                            .short("state")
+                            .takes_value(true)
+                            .help("immediately restore emulator state"))
                     .get_matches();
 
 
@@ -80,7 +85,12 @@ fn main() -> GameResult {
                                         .unwrap();
 
     // instanciate gg emulator
-    let gg = system::GameGear::new(rom);
+    let mut gg = system::GameGear::new(rom);
+
+    // restore state if needed
+    if let Some(state_filename) = matches.value_of("state") {
+        gg.load_state_from_file(state_filename);
+    }
 
     // instanciate an emulator window
     let mut emu_window = gui::EmulatorWindow::new(&mut ctx, gg, !pause)?;

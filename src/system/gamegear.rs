@@ -4,6 +4,11 @@ use crate::system::JoystickButton;
 
 use std::collections::VecDeque;
 
+use std::io;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::fs::File;
+
 pub struct GameGear {
  
     // cpu
@@ -33,6 +38,36 @@ impl GameGear {
             last_scanline_cycle: 0,
             first_step: true,
         }
+    }
+
+    pub fn save_state(&self) {
+        // fetch system serialized state
+        let ss = self.cpu.serialize_state();
+
+        // ouput serialized state to file
+        let mut f = File::create("./rgg-state.json").unwrap();
+        f.write(ss.to_string().as_bytes());
+
+        println!("State saved to file");
+    }
+
+    pub fn load_state(&mut self) {
+        self.load_state_from_file("./rgg-state.json")
+    }
+
+    pub fn load_state_from_file(&mut self, filename:&str) {
+
+        // open state from file
+        let f = File::open(filename).unwrap();
+        let mut bf = BufReader::new(f);
+
+        let mut fss = String::new();
+        bf.read_to_string(&mut fss).unwrap();
+        let ss = serde_json::from_str(&fss).unwrap();
+        println!("State loaded from file");
+
+        // restore system state
+        self.cpu.restore_state(ss);
     }
 
     pub fn reset(&mut self) {
