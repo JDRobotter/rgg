@@ -4,7 +4,6 @@ use crate::system::JoystickButton;
 
 use std::collections::VecDeque;
 
-use std::io;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::fs::File;
@@ -46,7 +45,7 @@ impl GameGear {
 
         // ouput serialized state to file
         let mut f = File::create("./rgg-state.json").unwrap();
-        f.write(ss.to_string().as_bytes());
+        f.write(ss.to_string().as_bytes()).unwrap();
 
         println!("State saved to file");
     }

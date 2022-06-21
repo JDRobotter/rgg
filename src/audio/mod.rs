@@ -1,6 +1,6 @@
 extern crate cpal;
-use cpal::traits::{HostTrait,EventLoopTrait};
-use cpal::{SampleRate,SampleFormat,Format,StreamData,UnknownTypeOutputBuffer};
+use cpal::{SampleRate,SampleFormat};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
 use std::thread;
 
@@ -333,9 +333,27 @@ impl AudioSynthGenerator {
 
 pub struct AudioSynth {
     queue: Sender<AudioSynthCommand>,
+    stream: cpal::Stream,
 }
 
 impl AudioSynth {
+
+
+    fn find_config(configs:cpal::SupportedOutputConfigs, rate:cpal::SampleRate, fmt:cpal::SampleFormat, channels:cpal::ChannelCount) 
+        -> Option<cpal::StreamConfig> {
+    
+        for config in configs {
+            let min_rate = config.min_sample_rate();
+            let max_rate = config.max_sample_rate();
+            if min_rate < rate && rate < max_rate {
+                let ssc = config.with_sample_rate(rate);
+                if ssc.sample_format() == fmt && ssc.channels() == channels {
+                    return Some(ssc.config());
+                }
+            }
+        };
+        None
+    }
 
     pub fn new() -> AudioSynth {
 
@@ -344,50 +362,41 @@ impl AudioSynth {
             .default_output_device()
             .expect("failed to find a default audio output device");
 
-        let sample_rate_hz = 44100;
-        let format = Format {
-            channels: 1,
-            sample_rate: SampleRate(sample_rate_hz),
-            data_type: SampleFormat::I16
-        };
+        let configs = device
+            .supported_output_configs()
+            .expect("failed to obtain a list of supported configurations");
 
-        let event_loop = host.event_loop();
-        let sid = event_loop.build_output_stream(&device, &format)
-                    .expect("failed to ::build_output_stream");
+        let sample_rate_hz = 44100;
+
+
+        let config = Self::find_config(configs, cpal::SampleRate(44100), cpal::SampleFormat::I16, 1)
+                    .expect("unable to configure output device with required parameters");
 
         // instanciate mt channel
         let (tx,rx): (Sender<AudioSynthCommand>, Receiver<AudioSynthCommand>) = mpsc::channel();
+        
+        // instanciate audio generator
+        let mut generator = AudioSynthGenerator::new(rx, sample_rate_hz);
 
-        event_loop.play_stream(sid).expect("failed to ::play_stream");
+        let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
-        // spawn a thread running cpal event loop
-        thread::spawn(move || {
+        let data_fn = move |data:&mut[i16], _:&cpal::OutputCallbackInfo| {
 
-            let mut generator = AudioSynthGenerator::new(rx, sample_rate_hz);
+            for i in 0..data.len() {
+                data[i] = generator.next_sample();
+            }
+        };
+        let stream = device.build_output_stream(&config, data_fn, err_fn)
+                    .expect("failed to build_output_stream()");
 
-            event_loop.run(move |stream_id,stream_result| {
-                let stream_data = match stream_result {
-                    Ok(data) => data,
-                    Err(err) => {
-                        eprintln!("an error occured on stream {:?}: {}",
-                            stream_id, err);
-                        return;
-                    }
-                };
+        stream.play()
+            .expect("failed to play() stream");
 
-                match stream_data {
-                    StreamData::Output { buffer: UnknownTypeOutputBuffer::I16(mut buffer) } => {
-                        for e in buffer.iter_mut() {
-                            *e = generator.next_sample();
-                        }
-                    },
-                    _ => (),
-                }
-            });
-        });
+        std::thread::sleep(std::time::Duration::from_millis(1000));
 
         AudioSynth {
             queue:tx,
+            stream,
         }
     }
 

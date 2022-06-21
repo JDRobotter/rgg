@@ -3,8 +3,8 @@
 use crate::bits::Bits;
 use crate::memory::MemoryBlock;
 
-use serde_json::{json,Result};
-use serde::{Deserialize,Serialize};
+use serde_json::json;
+use serde::{Serialize, Deserialize};
 
 bitflags! {
     struct VDPRegisterModeControl1: u8 {
@@ -84,7 +84,7 @@ enum SpriteSize {
 /// Background tile table entry
 #[derive(Debug)]
 struct BgTile {
-    priority: bool,
+    _priority: bool,
     palette: bool,
     vertical_flip: bool,
     horizontal_flip: bool,
@@ -111,7 +111,7 @@ impl BgTile {
         let flags = BgTileFlags::from_bits_truncate(word);
 
         BgTile {
-            priority:           flags.contains(BgTileFlags::PRIORITY),
+            _priority:           flags.contains(BgTileFlags::PRIORITY),
             palette:            flags.contains(BgTileFlags::PALETTE),
             vertical_flip:      flags.contains(BgTileFlags::VERTICAL_FLIP),
             horizontal_flip:    flags.contains(BgTileFlags::HORIZONTAL_FLIP),

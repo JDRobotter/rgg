@@ -1,8 +1,6 @@
 
 use Vec;
 
-use rand::prelude::*;
-
 pub struct MemoryBlock {
     size: usize,
     data: Vec<u8>,

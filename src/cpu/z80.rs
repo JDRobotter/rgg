@@ -16,7 +16,7 @@ use Z80JumpCondition as ZJC;
 use std::mem;
 
 use serde::{Deserialize,Serialize};
-use serde_json::{json,Result};
+use serde_json::json;
 
 bitflags! {
     #[derive(Serialize, Deserialize)]

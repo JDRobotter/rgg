@@ -60,23 +60,25 @@ fn main() -> GameResult {
     // do not use WINIT backend
     std::env::set_var("WINIT_UNIX_BACKEND", "x11");
 
-    let (mut ctx, mut event_loop) = ContextBuilder::new("RGG", "RGG")
+    let (mut ctx, event_loop) = ContextBuilder::new("RGG", "RGG")
                                         .add_resource_path(rsrc_dir)
                                         .window_mode(WindowMode {
                                             width: 1024.0,
                                             height: 768.0,
-                                            borderless: false,
+                                            maximized: false,
                                             fullscreen_type: FullscreenType::Windowed,
-                                            min_width: 0.0,
+                                            borderless: false,
+                                            min_width: 1.0,
                                             max_width: 0.0,
-                                            min_height: 0.0,
+                                            min_height: 1.0,
                                             max_height: 0.0,
                                             resizable: false,
-                                            maximized: false,
+                                            visible: true,
+                                            resize_on_scale_factor_change: false,
                                         })
                                         .window_setup(WindowSetup {
                                             title: "RGG".to_owned(),
-                                            samples: NumSamples::Zero,
+                                            samples: NumSamples::One,
                                             vsync: true,
                                             icon: "".to_owned(),
                                             srgb: true,
@@ -93,8 +95,8 @@ fn main() -> GameResult {
     }
 
     // instanciate an emulator window
-    let mut emu_window = gui::EmulatorWindow::new(&mut ctx, gg, !pause)?;
+    let emu_window = gui::EmulatorWindow::new(&mut ctx, gg, !pause)?;
 
     // run window
-    event::run(&mut ctx, &mut event_loop, &mut emu_window)
+    event::run(ctx, event_loop, emu_window)
 }

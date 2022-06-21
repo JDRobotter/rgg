@@ -3,8 +3,8 @@ use crate::audio::AudioSynth;
 use crate::audio::AudioSynthAction as ASA;
 use crate::audio::AudioSynthCommand as ASC;
 
-use serde_json::{json,Result};
-use serde::{Deserialize,Serialize};
+use serde_json::json;
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 #[derive(Clone,Copy)]

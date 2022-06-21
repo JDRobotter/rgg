@@ -1,9 +1,9 @@
-use cgmath;
+use glam;
 
 use ggez;
-use ggez::graphics::{self, DrawParam, Color};
+use ggez::graphics::{self, DrawParam};
 use ggez::{event, Context, GameResult};
-use ggez::event::{KeyCode, KeyMods, GamepadId, Button};
+use ggez::event::{GamepadId, Button, KeyCode, KeyMods};
 
 use crate::system::GameGear;
 
@@ -20,11 +20,11 @@ pub struct EmulatorWindow {
 
     gg: GameGear,
 
-    font: graphics::Font,
-
     running: bool,
     run_one_step: bool,
     run_one_frame: bool,
+
+    font: graphics::Font,
 
     #[allow(dead_code)]
     ram_watchers: Vec<RamWatcher>,
@@ -36,18 +36,18 @@ impl EmulatorWindow {
     
     pub fn new(ctx: &mut Context, gg: GameGear, start_immediately:bool) -> GameResult<EmulatorWindow> {
 
-
-        let font = graphics::Font::new(ctx, "/DejaVuSansMono.ttf")?;
-
         let watchers = vec![
         ];
 
         Ok(EmulatorWindow {
             gg: gg,
-            font:font,
+
             running: start_immediately,
             run_one_step: false,
             run_one_frame: false,
+
+            font: graphics::Font::new(ctx, "/DejaVuSansMono.ttf")?,
+
             ram_watchers: watchers,
             cpu_time: ScalarStatistics::new(5*60),
         })
@@ -84,7 +84,7 @@ impl event::EventHandler for EmulatorWindow {
         }
     }
 
-    fn key_up_event(&mut self, _ctx: &mut Context, kc: KeyCode, _km: KeyMods) {
+    fn key_up_event(&mut self, _ctx: &mut Context, kc: KeyCode, _keymod: KeyMods) {
         match kc {
             KeyCode::Up => self.gg.set_button_state(JoyButton::Up, false),
             KeyCode::Down => self.gg.set_button_state(JoyButton::Down, false),
@@ -97,7 +97,7 @@ impl event::EventHandler for EmulatorWindow {
         }
     }
 
-    fn key_down_event(&mut self, _ctx: &mut Context, kc: KeyCode, _km: KeyMods, _repeat:bool) {
+    fn key_down_event(&mut self, _ctx: &mut Context, kc: KeyCode, _keymod: KeyMods, _repeat:bool) {
         match kc {
             KeyCode::Up => self.gg.set_button_state(JoyButton::Up, true),
             KeyCode::Down => self.gg.set_button_state(JoyButton::Down, true),
@@ -127,6 +127,8 @@ impl event::EventHandler for EmulatorWindow {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
+
+        graphics::clear(ctx, [0.1, 0.1, 0.1, 1.0].into());
 
         let fps = ggez::timer::fps(ctx);
 
@@ -167,8 +169,6 @@ impl event::EventHandler for EmulatorWindow {
         );
 
         // -- start drawing --
-        //
-        graphics::clear(ctx, Color::new(0.1,0.1,0.1,1.0));
 
         // -- computing screen size --
         // game gear screen is 4:3 but screen is 160x144
@@ -178,25 +178,26 @@ impl event::EventHandler for EmulatorWindow {
         let sh = 144.0*1.0*sf;
 
         // -- draw emulator stats --
-        let text = graphics::Text::new((
-                    format!("FPS: {:1.1} CPU: ({:6.0}us {:6.0}us {:6.0}us)",
-                            fps,
-                            self.cpu_time.min(),
-                            self.cpu_time.mean(),
-                            self.cpu_time.max(),
-                        ),
-                    self.font,
-                    14.0));
-        let xy = cgmath::Point2::new(20.0, 1.0);
-        graphics::draw(ctx, &text, (xy,))?;
-
+        graphics::draw(ctx,
+                        &graphics::Text::new((
+                            format!("FPS: {:1.1} CPU: ({:6.0}us {:6.0}us {:6.0}us)",
+                                fps,
+                                self.cpu_time.min(),
+                                self.cpu_time.mean(),
+                                self.cpu_time.max(),
+                            ),
+                            self.font,
+                            14.0
+                        )),
+                        (glam::vec2(20.0, 1.0),),
+        )?;
         // -- draw GG LCD screen --
         // draw border
         let r = graphics::Rect::new(20.0, 20.0, sw+2.0, sh+2.0);
         let rlcd = graphics::Mesh::new_rectangle(ctx,
                                     graphics::DrawMode::stroke(2.0),
                                     r,
-                                    graphics::WHITE)?;
+                                    graphics::Color::new(1.0,1.0,1.0,1.0))?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
         // draw screen 
@@ -220,10 +221,11 @@ impl event::EventHandler for EmulatorWindow {
 
         // scale factor
         let im = graphics::Image::from_rgba8(ctx, 160, 144, &rgba)?;
-        graphics::draw(ctx, &im, 
-            graphics::DrawParam::new()
-                .dest(cgmath::Point2::new(21.0, 21.0))
-                .scale(cgmath::Vector2::new(1.2*sf, sf)))?;
+        graphics::draw(ctx,
+                        &im,
+                        graphics::DrawParam::new()
+                            .dest(glam::vec2(21.0, 21.0))
+                            .scale(glam::vec2(1.2*sf, sf)))?;
 
         // -- draw VDP tiles pattern numbers overlay --
         /*
@@ -245,19 +247,18 @@ impl event::EventHandler for EmulatorWindow {
 
         // -- draw GG instructions --
         for (idx,line) in self.gg.instructions.iter().rev().enumerate() {
-            let text = graphics::Text::new((line.as_str(), self.font, 16.0));
+
             let mf = idx as f32;
-            let xy = cgmath::Point2::new(40.0 + sw, 20.0 + mf*18.0);
-            graphics::draw(ctx, &text, (xy,))?;
+            graphics::draw(ctx,
+                        &graphics::Text::new((line.as_str(), self.font, 16.0)),
+                        (glam::vec2(40.0 + sw, 20.0 + mf*18.0),))?;
         }
         
+        
         // -- draw GG Z80 registers status --
-        let text = graphics::Text::new((
-                    self.gg.cpu.registers_debug_string().as_str(),
-                    self.font,
-                    16.0));
-        let xy = cgmath::Point2::new(20.0, sh + 40.0);
-        graphics::draw(ctx, &text, (xy,))?;
+        graphics::draw(ctx,
+            &graphics::Text::new((self.gg.cpu.registers_debug_string().as_str(), self.font, 16.0)),
+            (glam::vec2(20.0, sh + 40.0),))?;
 
         /*
         // -- draw watchers values --
@@ -303,19 +304,15 @@ impl event::EventHandler for EmulatorWindow {
         let rlcd = graphics::Mesh::new_rectangle(ctx,
                                     graphics::DrawMode::stroke(1.0),
                                     r,
-                                    graphics::WHITE)?;
+                                    graphics::Color::new(1.0,1.0,1.0,1.0))?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
 
         // -- draw joystick/buttons state --
-        let text = graphics::Text::new((
-                self.gg.cpu.bus.joystick.to_string(),
-                self.font,
-                16.0));
-        let xy = cgmath::Point2::new(sw + 220.0, 310.0);
-        graphics::draw(ctx, &text, (xy,))?;
+        graphics::draw(ctx,
+            &graphics::Text::new((self.gg.cpu.bus.joystick.to_string(), self.font, 16.0)),
+            (glam::vec2(sw + 220.0, 310.0),) )?;
 
         // -- draw GG pattern table --
-        //
         let bx = sw + 40.0;
         let by = 350.0;
         for py in 0..16 {
@@ -342,22 +339,22 @@ impl event::EventHandler for EmulatorWindow {
                 // draw image
 
                 let im = graphics::Image::from_rgba8(ctx, 8, 8, &rgba)?;
-                graphics::draw(ctx, &im,
-                    graphics::DrawParam::new()
-                        .dest(cgmath::Point2::new(bx + (px as f32)*8.0,
+                graphics::draw(ctx,
+                            &im,
+                            graphics::DrawParam::new()
+                                .dest(glam::vec2(bx + (px as f32)*8.0,
                                                     by + (py as f32)*8.0)))?;
-
             }
         }
+
         let w = 16.0;
         let h = 16.0;
         let r = graphics::Rect::new(bx, by, 8.0*w, 8.0*h);
         let rlcd = graphics::Mesh::new_rectangle(ctx,
                                     graphics::DrawMode::stroke(1.0),
                                     r,
-                                    graphics::WHITE)?;
+                                    graphics::Color::new(1.0,1.0,1.0,1.0))?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
-
 
         // -- draw GG sprite table --
         //
@@ -388,7 +385,7 @@ impl event::EventHandler for EmulatorWindow {
                 let im = graphics::Image::from_rgba8(ctx, 8, 8, &rgba)?;
                 graphics::draw(ctx, &im,
                     graphics::DrawParam::new()
-                        .dest(cgmath::Point2::new(bx + (px as f32)*8.0,
+                        .dest(glam::vec2(bx + (px as f32)*8.0,
                                                     by + (py as f32)*8.0)))?;
 
             }
@@ -399,10 +396,11 @@ impl event::EventHandler for EmulatorWindow {
         let rlcd = graphics::Mesh::new_rectangle(ctx,
                                     graphics::DrawMode::stroke(1.0),
                                     r,
-                                    graphics::WHITE)?;
+                                    graphics::Color::new(1.0,1.0,1.0,1.0))?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
-
+        
         // -- draw RAM --
+        /*
         let bx = sw + 40.0;
         let by = 500.0;
         let mut rgba: [u8;91*91*4] = [0;91*91*4];
@@ -422,13 +420,15 @@ impl event::EventHandler for EmulatorWindow {
                 rgba[4*addr + 3] = 0xff;
             }
         }
-        let im = graphics::Image::from_rgba8(ctx, 91, 91, &rgba)?;
-        graphics::draw(ctx, &im,
+        let im = graphics::Image::from_pixels(ctx, &rgba, TextureFormat::Rgba8Unorm, 91, 91);
+        canvas.draw(&im,
             graphics::DrawParam::new()
-                .dest(cgmath::Point2::new(bx,by))
-                .scale(cgmath::Vector2::new(2.0,2.0)))?;
+                .dest(glam::vec2(bx,by))
+                .scale(glam::vec2(2.0,2.0)));
+*/
+        graphics::present(ctx)?;
 
-        graphics::present(ctx)
+        Ok(())
     }
 
 }

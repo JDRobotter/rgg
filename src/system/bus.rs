@@ -5,8 +5,7 @@ use crate::system::VDP;
 use crate::system::PSG;
 use crate::system::Joystick;
 
-use serde_json::{json,Result};
-use serde::{Deserialize,Serialize};
+use serde_json::json;
 
 bitflags! {
     struct BankControlRegister: u8 {
