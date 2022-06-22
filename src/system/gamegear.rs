@@ -13,6 +13,9 @@ pub struct GameGear {
     // cpu
     pub cpu: Z80,
 
+    // true if debug instructions are traced
+    pub trace_instructions: bool,
+
     // debug instructions
     pub instructions: VecDeque<String>,
 
@@ -33,6 +36,7 @@ impl GameGear {
 
         GameGear {
             cpu: cpu,
+            trace_instructions: false,
             instructions: VecDeque::new(),
             last_scanline_cycle: 0,
             first_step: true,
@@ -67,6 +71,16 @@ impl GameGear {
 
         // restore system state
         self.cpu.restore_state(ss);
+    }
+
+    pub fn trace_instructions(&mut self, active:bool) {
+        let pactive = self.trace_instructions;
+        
+        if pactive && !active {
+            self.instructions.clear();
+        }
+
+        self.trace_instructions = active;
     }
 
     pub fn reset(&mut self) {
@@ -104,12 +118,12 @@ impl GameGear {
         will_break |= self.cpu.bus.psg.will_break();
 
         // push last decoded instruction to debug
-        let ass = self.cpu.dissassembly_debug_string();
+        if self.trace_instructions {
+            let ass = self.cpu.dissassembly_debug_string();
+            self.instructions.push_front(ass);
+            self.instructions.truncate(15);
+        }
 
-        self.instructions.push_front(ass);
-
-        self.instructions.truncate(15);
-        
         // duration in CPU cycles since last scanline
         let delta_sc = self.cpu.cycles() - self.last_scanline_cycle;
         if delta_sc > 266 {

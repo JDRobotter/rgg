@@ -123,18 +123,14 @@ impl event::EventHandler for EmulatorWindow {
     }
 
     fn update(&mut self, _ctx: &mut Context) -> GameResult {
-        Ok(())
-    }
-
-    fn draw(&mut self, ctx: &mut Context) -> GameResult {
-
-        graphics::clear(ctx, [0.1, 0.1, 0.1, 1.0].into());
-
-        let fps = ggez::timer::fps(ctx);
 
         let cpu_start = Instant::now();
         loop {
             if self.running {
+
+                // do not trace CPU instructions
+                self.gg.trace_instructions(false);
+
                 // step till next frame is ready
                 let (breakpoint,new_frame) = self.gg.step();
                 if breakpoint {
@@ -147,8 +143,13 @@ impl event::EventHandler for EmulatorWindow {
                 if new_frame {
                     break;
                 }
+
             }
             else if self.run_one_step {
+                // trace CPU instructions 
+                self.gg.trace_instructions(true);
+
+                // do one CPU step
                 self.gg.step();
                 self.run_one_step = false;
                 break;
@@ -167,6 +168,16 @@ impl event::EventHandler for EmulatorWindow {
         self.cpu_time.update(
             cpu_start.elapsed().as_micros() as f64
         );
+
+
+        Ok(())
+    }
+
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
+
+        graphics::clear(ctx, [0.1, 0.1, 0.1, 1.0].into());
+
+        let fps = ggez::timer::fps(ctx);
 
         // -- start drawing --
 
@@ -427,6 +438,8 @@ impl event::EventHandler for EmulatorWindow {
                 .scale(glam::vec2(2.0,2.0)));
 */
         graphics::present(ctx)?;
+
+        ggez::timer::yield_now();
 
         Ok(())
     }
