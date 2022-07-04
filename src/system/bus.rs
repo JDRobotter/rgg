@@ -163,16 +163,19 @@ impl SystemBus {
             // serial communication mode setting
             0x05 => {
                 // not implemented
+                println!("IO read to an unimplemented address: {:02x}", addr);
                 0
             },
             // memory control
             0x3E => {
                 // not implemented
+                println!("IO read to an unimplemented address: {:02x}", addr);
                 0
             },
             // IO port control
             0x3F => {
                 // not implemented
+                println!("IO read to an unimplemented address: {:02x}", addr);
                 0
             },
             // V counter
@@ -214,28 +217,34 @@ impl SystemBus {
             // read/write to the EXT connector
             0x01 => {
                 // nothing to do
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // IO port 02
             0x02 => {
                 // nothing to do
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // IO port 5
             // serial communication mode setting
             0x05 => {
                 // nothing to do
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // IO port 6
             // sound related stuff
             0x06 => {
                 // nothing to do
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // memory control
             0x3E => {
                 // not implemented
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // IO port control
             0x3F => {
                 // not implemented
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // SN 76489 data
             0x7E => {
@@ -255,9 +264,11 @@ impl SystemBus {
             },
             // IO port A/B
             0xDC | 0xC0 => {
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             // IO port B/misc
             0xDD | 0xC1 => {
+                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
             },
             _ => {
                 println!("IO write to unknown address: {:02x}", addr)

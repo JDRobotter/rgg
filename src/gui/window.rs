@@ -5,6 +5,9 @@ use ggez::graphics::{self, DrawParam};
 use ggez::{event, Context, GameResult};
 use ggez::event::{GamepadId, Button, KeyCode, KeyMods};
 
+use ggez::timer;
+use std::time::Duration;
+
 use crate::system::GameGear;
 
 use crate::math::ScalarStatistics;
@@ -122,7 +125,8 @@ impl event::EventHandler for EmulatorWindow {
         }
     }
 
-    fn update(&mut self, _ctx: &mut Context) -> GameResult {
+    /// Update will happen on every frame before it is drawn
+    fn update(&mut self, ctx: &mut Context) -> GameResult {
 
         let cpu_start = Instant::now();
         loop {
@@ -170,6 +174,11 @@ impl event::EventHandler for EmulatorWindow {
         );
 
 
+        // throttle game FPS
+        while timer::check_update_time(ctx, 60) {
+            timer::sleep(Duration::from_millis(1));
+        }
+
         Ok(())
     }
 
@@ -177,7 +186,7 @@ impl event::EventHandler for EmulatorWindow {
 
         graphics::clear(ctx, [0.1, 0.1, 0.1, 1.0].into());
 
-        let fps = ggez::timer::fps(ctx);
+        let fps = timer::fps(ctx);
 
         // -- start drawing --
 
@@ -439,7 +448,7 @@ impl event::EventHandler for EmulatorWindow {
 */
         graphics::present(ctx)?;
 
-        ggez::timer::yield_now();
+        timer::yield_now();
 
         Ok(())
     }

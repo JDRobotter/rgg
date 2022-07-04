@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate bitflags;
+extern crate itertools;
 
 use ggez::{ContextBuilder, GameResult};
 use ggez::conf::{WindowMode, WindowSetup, NumSamples, FullscreenType};
@@ -79,7 +80,7 @@ fn main() -> GameResult {
                                         .window_setup(WindowSetup {
                                             title: "RGG".to_owned(),
                                             samples: NumSamples::One,
-                                            vsync: true,
+                                            vsync: false,
                                             icon: "".to_owned(),
                                             srgb: true,
                                         })

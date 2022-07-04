@@ -1,8 +1,5 @@
 extern crate cpal;
-use cpal::{SampleRate,SampleFormat};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-
-use std::thread;
 
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
@@ -333,7 +330,7 @@ impl AudioSynthGenerator {
 
 pub struct AudioSynth {
     queue: Sender<AudioSynthCommand>,
-    stream: cpal::Stream,
+    _stream: cpal::Stream,
 }
 
 impl AudioSynth {
@@ -396,7 +393,7 @@ impl AudioSynth {
 
         AudioSynth {
             queue:tx,
-            stream,
+            _stream:stream,
         }
     }
 

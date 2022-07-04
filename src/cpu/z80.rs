@@ -13,6 +13,8 @@ use Z80InstructionLocation as ZIL;
 use crate::cpu::Z80JumpCondition;
 use Z80JumpCondition as ZJC;
 
+use crate::cpu::DecoderState;
+
 use std::mem;
 
 use serde::{Deserialize,Serialize};
@@ -148,6 +150,12 @@ impl Z80Registers {
     }
 }
 
+pub enum Z80RunState {
+    Running,
+    BreakpointReached,
+    UnknownInstruction,
+}
+
 pub struct Z80 {
 
     // system bus
@@ -171,7 +179,7 @@ pub struct Z80 {
     // last decoded instruction address in ROM space
     last_decoded_rom_address: usize,
     // last decoded instruction
-    last_decoded_instruction: Z80Instruction,
+    last_decoder_state: DecoderState<Z80Instruction>,
 
     // breakpoint address
     breakpoint_addresses: Vec<usize>,
@@ -195,7 +203,7 @@ impl Z80 {
 
             last_decoded_address: 0,
             last_decoded_rom_address: 0,
-            last_decoded_instruction: Z80Instruction::NOP,
+            last_decoder_state: DecoderState::Init,
 
             breakpoint_addresses: Vec::new(),
 
@@ -275,9 +283,22 @@ impl Z80 {
         // ROM address space
         let ldra = self.last_decoded_rom_address;
 
-        format!("{:04x}:{:04x}: {:16}",
-            lda, ldra,
-            self.last_decoded_instruction.to_string())
+        match &self.last_decoder_state {
+            DecoderState::Complete(ins) => {
+                format!("{:04x}:{:04x}: {:16}",
+                    lda, ldra,
+                    ins.to_string())
+            },
+            DecoderState::Unknown(bytes) => {
+                format!("{:04x}:{:04x}: UNKNOWN {:02X?}",
+                    lda, ldra,
+                    bytes
+                )
+            },
+            _ => {
+                format!("??")
+            },
+        }
     }
 
     /// Return cpu registers debug string
@@ -297,7 +318,7 @@ impl Z80 {
     }
 
     /// Step CPU by one instruction, return true on breakpoint
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self) -> Z80RunState {
 
         let pc = self.registers.pc;
         self.last_decoded_address = pc;
@@ -311,8 +332,10 @@ impl Z80 {
             self.registers.pc += 1;
 
             // feed byte to instruction decoder
-            match self.decoder.push(opb) {
-                Some(ins) => {
+            let ds = self.decoder.push(opb);
+            self.last_decoder_state = ds.clone();
+            match ds {
+                DecoderState::Complete(ins) => {
      
                     // increment lowest 7 bits of register R
                     let r = self.registers.r;
@@ -322,24 +345,31 @@ impl Z80 {
                     // execute decoded instruction
                     let tstates = self.execute_instruction(ins);
                     
-                    // store instruction
-                    self.last_decoded_instruction = ins;
-
                     // increment cycles counter
                     self.ncycles += tstates as i64;
-
                     break;
                 },
 
-                None => {
+               DecoderState::Unknown(_) => {
+                    // unknown instruction reached, break execution
+                    return Z80RunState::UnknownInstruction;
+                },
+
+               _ => {
                     // nothing to do
                 },
+  
             };
 
         }//loop
  
         // test breakpoint
-        self.breakpoint_addresses.contains(&self.last_decoded_rom_address)
+        if self.breakpoint_addresses.contains(&self.last_decoded_rom_address) {
+            Z80RunState::BreakpointReached
+        }
+        else {
+            Z80RunState::Running
+        }
     }
 
     fn bus_read(&self, addr:u16) -> u8 {

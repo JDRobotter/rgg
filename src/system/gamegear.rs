@@ -1,4 +1,4 @@
-use crate::cpu::Z80;
+use crate::cpu::{Z80, Z80RunState};
 use crate::memory::Rom;
 use crate::system::JoystickButton;
 
@@ -110,7 +110,20 @@ impl GameGear {
         // Z80 can run approx 266 clocks cycles per scanline
 
         let mut new_frame = false;
-        let mut will_break = self.cpu.step();
+        let mut will_break = false;
+        match self.cpu.step() {
+
+            Z80RunState::Running => {
+            },
+
+            Z80RunState::BreakpointReached => {
+                will_break = true;
+            },
+
+            Z80RunState::UnknownInstruction => {
+                will_break = true;  
+            },
+        }
 
         // bus, VDP or PSG may trigger a breakpoint
         will_break |= self.cpu.bus.will_break();
