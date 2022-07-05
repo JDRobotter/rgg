@@ -145,6 +145,7 @@ impl event::EventHandler for EmulatorWindow {
 
                 // next frame ready
                 if new_frame {
+                    self.gg.cpu.bus.vdp.render();
                     break;
                 }
 
@@ -154,8 +155,15 @@ impl event::EventHandler for EmulatorWindow {
                 self.gg.trace_instructions(true);
 
                 // do one CPU step
-                self.gg.step();
+                let (_,new_frame) = self.gg.step();
                 self.run_one_step = false;
+
+                // next frame ready
+                if new_frame {
+                    self.gg.cpu.bus.vdp.render();
+                    break;
+                }
+
                 break;
             }
             else {
@@ -172,12 +180,6 @@ impl event::EventHandler for EmulatorWindow {
         self.cpu_time.update(
             cpu_start.elapsed().as_micros() as f64
         );
-
-
-        // throttle game FPS
-        while timer::check_update_time(ctx, 60) {
-            timer::sleep(Duration::from_millis(1));
-        }
 
         Ok(())
     }
@@ -219,9 +221,6 @@ impl event::EventHandler for EmulatorWindow {
                                     r,
                                     graphics::Color::new(1.0,1.0,1.0,1.0))?;
         graphics::draw(ctx, &rlcd, DrawParam::default())?;
-
-        // draw screen 
-        self.gg.cpu.bus.vdp.render();
 
         let mut rgba: [u8;160*144*4] = [0;160*144*4];
         for y in 0..144 {
@@ -440,12 +439,12 @@ impl event::EventHandler for EmulatorWindow {
                 rgba[4*addr + 3] = 0xff;
             }
         }
-        let im = graphics::Image::from_pixels(ctx, &rgba, TextureFormat::Rgba8Unorm, 91, 91);
-        canvas.draw(&im,
+        let im = graphics::Image::from_rgba8(ctx, 91, 91, &rgba)?;
+        graphics::draw(ctx, &im,
             graphics::DrawParam::new()
                 .dest(glam::vec2(bx,by))
-                .scale(glam::vec2(2.0,2.0)));
-*/
+                .scale(glam::vec2(2.0,2.0)))?;
+        */
         graphics::present(ctx)?;
 
         timer::yield_now();

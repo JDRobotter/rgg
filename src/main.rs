@@ -80,7 +80,7 @@ fn main() -> GameResult {
                                         .window_setup(WindowSetup {
                                             title: "RGG".to_owned(),
                                             samples: NumSamples::One,
-                                            vsync: false,
+                                            vsync: true,
                                             icon: "".to_owned(),
                                             srgb: true,
                                         })
