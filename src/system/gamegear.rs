@@ -118,10 +118,12 @@ impl GameGear {
 
             Z80RunState::BreakpointReached => {
                 will_break = true;
+                self.trace_instructions = true;
             },
 
             Z80RunState::UnknownInstruction => {
-                will_break = true;  
+                will_break = true;
+                self.trace_instructions = true;
             },
         }
 

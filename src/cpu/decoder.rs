@@ -62,7 +62,7 @@ pub struct Decoder<T> {
 pub enum DecoderState<T> {
     Init,
     Incomplete,
-    Complete(T),
+    Complete(T, Vec<u8>),
     Unknown(Vec<u8>),
 }
 
@@ -108,7 +108,7 @@ impl<T> Decoder<T>
                     if rembytes.is_empty() {
                         // end of instruction
                         match branch.instruction {
-                            Some(ins) => { return DecoderState::Complete(ins) }
+                            Some(ins) => { return DecoderState::Complete(ins, all_bytes.to_vec()) }
                             None => { return DecoderState::Incomplete }
                         }
                     }
@@ -128,18 +128,16 @@ impl<T> Decoder<T>
         }
     }
     
-    pub fn decode(&mut self, byte:u8) -> DecoderState<T> {
-        self.in_buffer.push(byte);
+    pub fn push(&mut self, byte:u8) {
+        self.in_buffer.push(byte)
+    }
 
-        let state = Decoder::decode_buffer(&self.tree, &self.in_buffer, &self.in_buffer);
+    pub fn decode(&self) -> DecoderState<T> {
+        Decoder::decode_buffer(&self.tree, &self.in_buffer, &self.in_buffer)
+    }
 
-        match state {
-            DecoderState::Complete(_) => { self.in_buffer.clear() },
-            DecoderState::Unknown(_) => { self.in_buffer.clear() },
-            _ => {},
-        };
-
-        state
+    pub fn clear(&mut self) {
+        self.in_buffer.clear()
     }
 
 }
