@@ -1,4 +1,3 @@
-
 use crate::memory::MemoryBlock;
 
 pub struct Ram {
@@ -7,10 +6,9 @@ pub struct Ram {
 }
 
 impl Ram {
-
     pub fn new() -> Ram {
         Ram {
-            data: MemoryBlock::new(8192,0xff),
+            data: MemoryBlock::new(8192, 0xff),
         }
     }
 
@@ -18,34 +16,31 @@ impl Ram {
         self.data.to_base64()
     }
 
-    pub fn restore_state(&mut self, state:&serde_json::Value) {
+    pub fn restore_state(&mut self, state: &serde_json::Value) {
         let ss = state.as_str().unwrap();
         self.data.from_base64(ss);
     }
 
-    fn check_address_validity(&self, addr:usize) -> bool {
+    fn check_address_validity(&self, addr: usize) -> bool {
         let sz = self.data.len();
         addr < sz
     }
 
-    pub fn write(&mut self, addr:u16, byte:u8) {
+    pub fn write(&mut self, addr: u16, byte: u8) {
         let addr = addr as usize;
         if self.check_address_validity(addr) {
             self.data[addr] = byte;
-        }
-        else {
+        } else {
             panic!("out of bounds access to RAM ({:04x})", addr);
         }
     }
 
-    pub fn read(&self, addr:u16) -> u8 {
+    pub fn read(&self, addr: u16) -> u8 {
         let addr = addr as usize;
         if self.check_address_validity(addr) {
             self.data[addr]
-        }
-        else {
+        } else {
             panic!("out of bounds access to RAM ({:04x}", addr);
         }
     }
-
 }

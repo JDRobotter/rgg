@@ -12,11 +12,11 @@ pub struct ScalarStatistics {
 }
 
 impl ScalarStatistics {
-    pub fn new(n:usize) -> ScalarStatistics {
+    pub fn new(n: usize) -> ScalarStatistics {
         ScalarStatistics {
-            mean:0.0,
-            max:0.0,
-            min:0.0,
+            mean: 0.0,
+            max: 0.0,
+            min: 0.0,
 
             size: n,
 
@@ -25,8 +25,7 @@ impl ScalarStatistics {
         }
     }
 
-    pub fn update(&mut self, v:f64) {
-            
+    pub fn update(&mut self, v: f64) {
         // pop from buffer if next push will oversize it
         if self.buffer.len() >= self.size {
             let pv = self.buffer.pop().unwrap();
@@ -38,12 +37,18 @@ impl ScalarStatistics {
         self.sum += v;
 
         // update stats
-        let sum:f64 = self.buffer.iter().sum();
+        let sum: f64 = self.buffer.iter().sum();
         let n = self.buffer.len() as f64;
         self.mean = sum / n;
 
-        self.max = self.buffer.iter().fold(f64::MIN, |acc,x| if acc > *x { acc } else { *x });
-        self.min = self.buffer.iter().fold(f64::MAX, |acc,x| if acc < *x { acc } else { *x });
+        self.max = self
+            .buffer
+            .iter()
+            .fold(f64::MIN, |acc, x| if acc > *x { acc } else { *x });
+        self.min = self
+            .buffer
+            .iter()
+            .fold(f64::MAX, |acc, x| if acc < *x { acc } else { *x });
     }
 
     pub fn max(&self) -> f64 {

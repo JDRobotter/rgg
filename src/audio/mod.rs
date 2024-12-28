@@ -1,8 +1,8 @@
 extern crate cpal;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
-use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 
 use crate::cpu::Z80;
 
@@ -25,7 +25,7 @@ impl LFSR {
         }
     }
 
-    fn set_feedback(&mut self, b:bool) {
+    fn set_feedback(&mut self, b: bool) {
         self.feedback = b;
     }
 
@@ -34,22 +34,20 @@ impl LFSR {
     }
 
     pub fn shift(&mut self) {
-
         if self.feedback {
             // https://www.smspower.org/Development/SN76489?from=Development.PSG
             // For the SMS (1 and 2), Genesis and Game Gear,
             // the tapped bits are bits 0 and 3 ($0009), fed back into bit 15.
 
-            let b0: bool = self.register & (1<<0) != 0;
-            let b3: bool = self.register & (1<<3) != 0;
+            let b0: bool = self.register & (1 << 0) != 0;
+            let b3: bool = self.register & (1 << 3) != 0;
             let nb = b0 ^ b3;
 
             // fed bit back to register
-            self.register = if nb { 0x8000 } else {0x0000} | self.register >> 1;
-        
+            self.register = if nb { 0x8000 } else { 0x0000 } | self.register >> 1;
+
             self.output = if b0 { 1.0 } else { -1.0 };
-        }
-        else {
+        } else {
             // periodic noise mode
             let bit0 = self.register & 1;
             self.register = self.register >> 1 | bit0 << 15;
@@ -58,7 +56,7 @@ impl LFSR {
         }
     }
 
-    fn update(&mut self, x:f64) -> f64 {
+    fn update(&mut self, x: f64) -> f64 {
         if x > 0.5 {
             if self.state == false {
                 // on rising edge
@@ -66,9 +64,7 @@ impl LFSR {
 
                 self.state = true;
             }
-        }
-        else {
-
+        } else {
             self.state = false;
         }
 
@@ -76,7 +72,7 @@ impl LFSR {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 struct ToneGeneratorParameters {
     active: bool,
     frequency: f64,
@@ -93,7 +89,7 @@ impl ToneGeneratorParameters {
     }
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 struct NoiseGeneratorParameters {
     amplitude: f64,
     coupled: bool,
@@ -112,7 +108,7 @@ impl NoiseGeneratorParameters {
     }
 }
 
-#[derive(Copy,Clone,Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum AudioSynthAction {
     SyncTiming,
     SetToneActive(usize, bool),
@@ -125,7 +121,7 @@ pub enum AudioSynthAction {
 }
 use AudioSynthAction as ASA;
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub struct AudioSynthCommand {
     timestamp: Instant,
     z80_cycle: i64,
@@ -133,7 +129,6 @@ pub struct AudioSynthCommand {
 }
 
 impl AudioSynthCommand {
-
     pub fn new(cycle: i64, action: AudioSynthAction) -> AudioSynthCommand {
         AudioSynthCommand {
             timestamp: Instant::now(),
@@ -160,7 +155,7 @@ struct AudioSynthGenerator {
 }
 
 impl AudioSynthGenerator {
-    pub fn new(rx:Receiver<AudioSynthCommand>, sample_rate_hz:u32) -> AudioSynthGenerator {
+    pub fn new(rx: Receiver<AudioSynthCommand>, sample_rate_hz: u32) -> AudioSynthGenerator {
         AudioSynthGenerator {
             queue: rx,
 
@@ -168,7 +163,7 @@ impl AudioSynthGenerator {
             sample_time_sps: 0,
 
             tone_generators: [ToneGeneratorParameters::new(); 3],
-            
+
             noise_generator: NoiseGeneratorParameters::new(),
             noise_lfsr: LFSR::new(),
 
@@ -177,49 +172,48 @@ impl AudioSynthGenerator {
         }
     }
 
-    fn apply_action(&mut self, action:AudioSynthAction) {
+    fn apply_action(&mut self, action: AudioSynthAction) {
         match action {
-            ASA::SetToneActive(n,b) =>      {
+            ASA::SetToneActive(n, b) => {
                 self.tone_generators[n].active = b;
-            },
-            ASA::SetToneAmplitude(n,v) =>   {
+            }
+            ASA::SetToneAmplitude(n, v) => {
                 self.tone_generators[n].amplitude = v;
-            },
-            ASA::SetToneFrequency(n,f) =>   {
+            }
+            ASA::SetToneFrequency(n, f) => {
                 self.tone_generators[n].frequency = f;
-            },
+            }
             ASA::ResetNoiseRegister => {
                 self.noise_lfsr.reset();
-            },
-            ASA::SetNoiseAmplitude(v) =>    {
+            }
+            ASA::SetNoiseAmplitude(v) => {
                 self.noise_generator.amplitude = v;
-            },
-            ASA::SetNoiseFeedback(b) =>     {
+            }
+            ASA::SetNoiseFeedback(b) => {
                 self.noise_generator.feedback = b;
-            },
-            ASA::SetNoiseFrequency(b,f) =>  {
+            }
+            ASA::SetNoiseFrequency(b, f) => {
                 self.noise_generator.frequency = f;
                 self.noise_generator.coupled = b;
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
-    fn square(x:f64) -> f64 {
+    fn square(x: f64) -> f64 {
         // use square function Fourier expansion to "soften" the sound
         const N: usize = 10;
         let mut y = 0.0;
         for k in 0..N {
-            const TWO_PI:f64 = 2.0*std::f64::consts::PI;
-            let a = 2.0*(k as f64) - 1.0;
+            const TWO_PI: f64 = 2.0 * std::f64::consts::PI;
+            let a = 2.0 * (k as f64) - 1.0;
             y += (TWO_PI * a * x).sin() / a;
         }
-        
-        (4.0*y) / std::f64::consts::PI
+
+        (4.0 * y) / std::f64::consts::PI
     }
 
     fn pop_commands(&mut self) {
-
         // current audio time in microseconds
         let audio_time_us = 1_000_000 * self.sample_time_sps / self.sample_rate_hz;
 
@@ -231,7 +225,6 @@ impl AudioSynthGenerator {
 
             // execute next command when scheduled
             if let Some(command) = self.next_command {
-
                 // CPU time in microseconds
                 let cpu_time_us = 1_000_000 * command.z80_cycle / Z80::clock_frequency_hz();
 
@@ -256,33 +249,31 @@ impl AudioSynthGenerator {
                         // convert to time in microseconds
                         let cpu_time_us = 1_000_000 * cpu_cycle / Z80::clock_frequency_hz();
 
-                        let dt_us = (audio_time_us - cpu_time_us) - self.sync_timing_us.unwrap_or(0);
+                        let dt_us =
+                            (audio_time_us - cpu_time_us) - self.sync_timing_us.unwrap_or(0);
 
                         // execute audio commands with a 5ms latency
                         if dt_us > 5000 {
                             self.apply_action(command.action);
                             // reset command
                             self.next_command = None
-                        }
-                        else {
+                        } else {
                             // next command is not scheduled to apply now
                             return;
                         }
                     }
                 }
-            }
-            else {
+            } else {
                 // no more command to execute
                 return;
             }
-        }//loop
+        } //loop
     }
     fn next_sample(&mut self) -> i16 {
-
         // increment sample time
         self.sample_time_sps += 1;
 
-        let mut sample:f64 = 0.0;
+        let mut sample: f64 = 0.0;
         // increment time
         let sample_time = self.sample_time_sps as f64 / self.sample_rate_hz as f64;
 
@@ -292,14 +283,12 @@ impl AudioSynthGenerator {
         // iterate over tone generators
         for i in 0..3 {
             let tgp = &self.tone_generators[i];
-            
-            if tgp.active {
 
+            if tgp.active {
                 let y = if tgp.frequency == 0.0 {
                     // output DC value
                     tgp.amplitude
-                }
-                else {
+                } else {
                     let x = tgp.frequency * sample_time;
                     tgp.amplitude * AudioSynthGenerator::square(x)
                 };
@@ -311,8 +300,7 @@ impl AudioSynthGenerator {
         // noise generator
         let nf = if self.noise_generator.coupled {
             self.tone_generators[2].frequency
-        }
-        else {
+        } else {
             self.noise_generator.frequency
         };
         self.noise_lfsr.set_feedback(self.noise_generator.feedback);
@@ -327,18 +315,18 @@ impl AudioSynthGenerator {
     }
 }
 
-
 pub struct AudioSynth {
     queue: Sender<AudioSynthCommand>,
     _stream: cpal::Stream,
 }
 
 impl AudioSynth {
-
-
-    fn find_config(configs:cpal::SupportedOutputConfigs, rate:cpal::SampleRate, fmt:cpal::SampleFormat, channels:cpal::ChannelCount) 
-        -> Option<cpal::StreamConfig> {
-    
+    fn find_config(
+        configs: cpal::SupportedOutputConfigs,
+        rate: cpal::SampleRate,
+        fmt: cpal::SampleFormat,
+        channels: cpal::ChannelCount,
+    ) -> Option<cpal::StreamConfig> {
         for config in configs {
             let min_rate = config.min_sample_rate();
             let max_rate = config.max_sample_rate();
@@ -348,12 +336,11 @@ impl AudioSynth {
                     return Some(ssc.config());
                 }
             }
-        };
+        }
         None
     }
 
     pub fn new() -> AudioSynth {
-
         let host = cpal::default_host();
         let device = host
             .default_output_device()
@@ -365,40 +352,38 @@ impl AudioSynth {
 
         let sample_rate_hz = 44100;
 
-
-        let config = Self::find_config(configs, cpal::SampleRate(44100), cpal::SampleFormat::I16, 1)
-                    .expect("unable to configure output device with required parameters");
+        let config =
+            Self::find_config(configs, cpal::SampleRate(44100), cpal::SampleFormat::I16, 1)
+                .expect("unable to configure output device with required parameters");
 
         // instanciate mt channel
-        let (tx,rx): (Sender<AudioSynthCommand>, Receiver<AudioSynthCommand>) = mpsc::channel();
-        
+        let (tx, rx): (Sender<AudioSynthCommand>, Receiver<AudioSynthCommand>) = mpsc::channel();
+
         // instanciate audio generator
         let mut generator = AudioSynthGenerator::new(rx, sample_rate_hz);
 
         let err_fn = |err| eprintln!("Error building output sound stream: {}", err);
 
-        let data_fn = move |data:&mut[i16], _:&cpal::OutputCallbackInfo| {
-
+        let data_fn = move |data: &mut [i16], _: &cpal::OutputCallbackInfo| {
             for i in 0..data.len() {
                 data[i] = generator.next_sample();
             }
         };
-        let stream = device.build_output_stream(&config, data_fn, err_fn)
-                    .expect("failed to build_output_stream()");
+        let stream = device
+            .build_output_stream(&config, data_fn, err_fn)
+            .expect("failed to build_output_stream()");
 
-        stream.play()
-            .expect("failed to play() stream");
+        stream.play().expect("failed to play() stream");
 
         std::thread::sleep(std::time::Duration::from_millis(1000));
 
         AudioSynth {
-            queue:tx,
-            _stream:stream,
+            queue: tx,
+            _stream: stream,
         }
     }
 
-    pub fn push(&mut self, command:AudioSynthCommand) {
+    pub fn push(&mut self, command: AudioSynthCommand) {
         self.queue.send(command).unwrap();
     }
-
 }

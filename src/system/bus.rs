@@ -1,9 +1,8 @@
-
-use crate::memory::Rom;
 use crate::memory::Ram;
-use crate::system::VDP;
-use crate::system::PSG;
+use crate::memory::Rom;
 use crate::system::Joystick;
+use crate::system::PSG;
+use crate::system::VDP;
 
 use serde_json::json;
 
@@ -38,10 +37,8 @@ struct RomMapper {
 }
 
 impl RomMapper {
-    fn new(mux:u8) -> RomMapper {
-        RomMapper {
-            mux:mux
-        }
+    fn new(mux: u8) -> RomMapper {
+        RomMapper { mux: mux }
     }
 
     pub fn serialize_state(&self) -> serde_json::Value {
@@ -54,7 +51,7 @@ impl RomMapper {
         self.mux = state["mux"].as_u64().unwrap() as u8;
     }
 
-    fn set(&mut self, mux:u8) {
+    fn set(&mut self, mux: u8) {
         self.mux = mux
     }
 
@@ -62,7 +59,7 @@ impl RomMapper {
         // mask address to 16k
         let addr = iaddr & 0x3fff;
         // prepend mux selection address
-        (addr as usize) | ( (self.mux as usize) << 14 )
+        (addr as usize) | ((self.mux as usize) << 14)
     }
 
     fn read(&self, rom: &Rom, iaddr: u16) -> u8 {
@@ -72,7 +69,6 @@ impl RomMapper {
 }
 
 pub struct SystemBus {
-    
     rom: Rom,
     pub work_ram: Ram,
 
@@ -85,15 +81,13 @@ pub struct SystemBus {
     pub joystick: Joystick,
 
     will_break: bool,
-
 }
 
 impl SystemBus {
-
-    pub fn new(rom:Rom) -> SystemBus {
+    pub fn new(rom: Rom) -> SystemBus {
         SystemBus {
             rom: rom,
-            work_ram : Ram::new(),
+            work_ram: Ram::new(),
 
             // 315-5208 mapper power-up reset values
             bank0_mapper: RomMapper::new(0x00),
@@ -122,7 +116,6 @@ impl SystemBus {
     }
 
     pub fn restore_state(&mut self, state: &serde_json::Value) {
-
         self.work_ram.restore_state(&state["ram"]);
 
         self.bank0_mapper.restore_state(&state["bank0_mapper"]);
@@ -137,17 +130,16 @@ impl SystemBus {
         if self.will_break {
             self.will_break = false;
             true
-        }
-        else {
+        } else {
             false
         }
     }
 
-    pub fn synchronize_psg(&mut self, ncycle:i64) {
+    pub fn synchronize_psg(&mut self, ncycle: i64) {
         self.psg.synchronize_timing(ncycle)
     }
 
-    pub fn io_read(&mut self, addr:u8, _ncycle:i64) -> u8 {
+    pub fn io_read(&mut self, addr: u8, _ncycle: i64) -> u8 {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
@@ -157,59 +149,47 @@ impl SystemBus {
                 // - START/PAUSE OFF
                 // - overseas mode
                 // - NTSC mode
-                self.joystick.register_00() |  (IOPort00::NJAP).bits
-            },
+                self.joystick.register_00() | (IOPort00::NJAP).bits
+            }
             // IO port 5
             // serial communication mode setting
             0x05 => {
                 // not implemented
                 println!("IO read to an unimplemented address: {:02x}", addr);
                 0
-            },
+            }
             // memory control
             0x3E => {
                 // not implemented
                 println!("IO read to an unimplemented address: {:02x}", addr);
                 0
-            },
+            }
             // IO port control
             0x3F => {
                 // not implemented
                 println!("IO read to an unimplemented address: {:02x}", addr);
                 0
-            },
+            }
             // V counter
-            0x7E => {
-                self.vdp.v_counter()
-            },
+            0x7E => self.vdp.v_counter(),
             // H counter
-            0x7F => {
-                self.vdp.h_counter()
-            },
+            0x7F => self.vdp.h_counter(),
             // VDP data port
-            0xBE => {
-                self.vdp.read_data_port()
-            },
+            0xBE => self.vdp.read_data_port(),
             // VDP control port
-            0xBF | 0xBD => {
-                self.vdp.read_control_port()
-            },
+            0xBF | 0xBD => self.vdp.read_control_port(),
             // IO port A/B
-            0xDC | 0xC0 => {
-                self.joystick.register_dc()
-            },
+            0xDC | 0xC0 => self.joystick.register_dc(),
             // IO port B/misc
-            0xDD | 0xC1 => {
-                self.joystick.register_dd()
-            },
-            _ => { 
+            0xDD | 0xC1 => self.joystick.register_dd(),
+            _ => {
                 println!("IO read from unknown address: {:02x}", addr);
                 0
-            },
+            }
         }
     }
 
-    pub fn io_write(&mut self, addr:u8, data:u8, ncycle:i64) {
+    pub fn io_write(&mut self, addr: u8, data: u8, ncycle: i64) {
         // https://www.smspower.org/uploads/Development/smstech-20021112.txt
         // Z80 I/O ports
         match addr {
@@ -217,84 +197,97 @@ impl SystemBus {
             // read/write to the EXT connector
             0x01 => {
                 // nothing to do
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // IO port 02
             0x02 => {
                 // nothing to do
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // IO port 5
             // serial communication mode setting
             0x05 => {
                 // nothing to do
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // IO port 6
             // sound related stuff
             0x06 => {
                 // nothing to do
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // memory control
             0x3E => {
                 // not implemented
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // IO port control
             0x3F => {
                 // not implemented
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // SN 76489 data
-            0x7E => {
-                self.psg.write(data, ncycle)
-            },
+            0x7E => self.psg.write(data, ncycle),
             // SN 76489 data (mirror)
-            0x7F => {
-                self.psg.write(data, ncycle)
-            },
+            0x7F => self.psg.write(data, ncycle),
             // VDP data
-            0xBE => {
-                self.vdp.write_data_port(data)
-            },
+            0xBE => self.vdp.write_data_port(data),
             // VDP control
-            0xBF | 0xBD => {
-                self.vdp.write_control_port(data)
-            },
+            0xBF | 0xBD => self.vdp.write_control_port(data),
             // IO port A/B
             0xDC | 0xC0 => {
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             // IO port B/misc
             0xDD | 0xC1 => {
-                println!("IO write to an unimplemented address: {:02x} {:02x}", addr, data);
-            },
+                println!(
+                    "IO write to an unimplemented address: {:02x} {:02x}",
+                    addr, data
+                );
+            }
             _ => {
                 println!("IO write to unknown address: {:02x}", addr)
             }
         }
     }
 
-    pub fn map_rom_bank_address(&self, addr:u16) -> usize {
+    pub fn map_rom_bank_address(&self, addr: u16) -> usize {
         if addr <= 0x3fff {
             // ROM bank 0
             self.bank0_mapper.map_address(addr)
-        }
-        else if addr <= 0x7fff {
+        } else if addr <= 0x7fff {
             // ROM bank 1
             self.bank1_mapper.map_address(addr - 0x4000)
-        }
-        else if addr <= 0xbfff {
+        } else if addr <= 0xbfff {
             // ROM bank 2
             self.bank2_mapper.map_address(addr - 0x8000)
-        }
-        else {
+        } else {
             panic!("cannot map bank address over 0xc000");
         }
     }
 
-    pub fn cpu_read(&self, addr:u16) -> u8 {
+    pub fn cpu_read(&self, addr: u16) -> u8 {
         // The Z80's address space is shared by several components.
         // It has the following layout:
         //  $0000-$BFFF : Cartridge ROM (48k):
@@ -305,38 +298,34 @@ impl SystemBus {
         if addr <= 0x3fff {
             // ROM bank 0
             self.bank0_mapper.read(&self.rom, addr)
-        }
-        else if addr <= 0x7fff {
+        } else if addr <= 0x7fff {
             // ROM bank 1
             self.bank1_mapper.read(&self.rom, addr - 0x4000)
-        }
-        else if addr <= 0xbfff {
+        } else if addr <= 0xbfff {
             // ROM bank 2
             self.bank2_mapper.read(&self.rom, addr - 0x8000)
-        }
-        else if addr <= 0xdfff {
+        } else if addr <= 0xdfff {
             // work RAM
             self.work_ram.read(addr - 0xc000)
-        }
-        else /* if addr <= 0xffff */ { 
+        } else
+        /* if addr <= 0xffff */
+        {
             // work RAM, mirrored
             self.work_ram.read(addr - 0xe000)
         }
     }
 
-    pub fn cpu_write(&mut self, addr:u16, data:u8) {
+    pub fn cpu_write(&mut self, addr: u16, data: u8) {
         // The Z80's address space is shared by several components.
         // It has the following layout:
         //  $0000-$BFFF : Cartridge ROM (48k)
         //  $C000-$FFFF : Work RAM (8K, mirrored at $E000-$FFFF)
         if addr <= 0xbfff {
             println!("no writing to ROM ! (@{:04x})", addr)
-        }
-        else if addr <= 0xdfff {
+        } else if addr <= 0xdfff {
             // work RAM
             self.work_ram.write(addr - 0xc000, data)
-        }
-        else if addr < 0xfffc  {
+        } else if addr < 0xfffc {
             // work RAM, mirrored
             self.work_ram.write(addr - 0xe000, data)
         }
@@ -352,49 +341,41 @@ impl SystemBus {
             if data & 0x7F != 0x00 {
                 panic!("Unhandled mapper control: {:02x}", data);
             }
-        }
-        else if addr == 0xfffd {
+        } else if addr == 0xfffd {
             // write to RAM, mirrored
             self.work_ram.write(addr - 0xe000, data);
 
             // ROM mapping bank 0 configuration
             self.bank0_mapper.set(data);
-        }
-        else if addr == 0xfffe {
+        } else if addr == 0xfffe {
             // write to RAM, mirrored
             self.work_ram.write(addr - 0xe000, data);
 
             // ROM mapping bank 1 configuration
             self.bank1_mapper.set(data);
-        }
-        else if addr == 0xffff {
+        } else if addr == 0xffff {
             // write to RAM, mirrored
             self.work_ram.write(addr - 0xe000, data);
 
             // ROM mapping bank 2 configuration
             self.bank2_mapper.set(data);
-        }
-        else {
+        } else {
             panic!("CPU write defaulting for {:04x}", addr);
         }
     }
 
-    pub fn cpu_read_u16(&self, addr:u16) -> u16 {
-        let lo = self.cpu_read(addr) as u16; 
-        let hi = self.cpu_read(addr+1) as u16;
-        
+    pub fn cpu_read_u16(&self, addr: u16) -> u16 {
+        let lo = self.cpu_read(addr) as u16;
+        let hi = self.cpu_read(addr + 1) as u16;
+
         (hi << 8) | lo
     }
 
-    pub fn cpu_write_u16(&mut self, addr:u16, word:u16) {
+    pub fn cpu_write_u16(&mut self, addr: u16, word: u16) {
         let lo = word & 0xff;
         let hi = (word >> 8) & 0xff;
 
-        self.cpu_write(addr,   lo as u8);
-        self.cpu_write(addr+1, hi as u8);
+        self.cpu_write(addr, lo as u8);
+        self.cpu_write(addr + 1, hi as u8);
     }
-
-
 }
-
-

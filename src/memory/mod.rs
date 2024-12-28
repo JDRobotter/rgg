@@ -1,8 +1,7 @@
-
-mod rom;
-mod ram;
 mod block;
+mod ram;
+mod rom;
 
-pub use rom::Rom as Rom;
-pub use ram::Ram as Ram;
-pub use block::MemoryBlock as MemoryBlock;
+pub use block::MemoryBlock;
+pub use ram::Ram;
+pub use rom::Rom;

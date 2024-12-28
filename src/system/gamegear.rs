@@ -1,15 +1,14 @@
-use crate::cpu::{Z80, Z80RunState};
+use crate::cpu::{Z80RunState, Z80};
 use crate::memory::Rom;
 use crate::system::JoystickButton;
 
 use std::collections::VecDeque;
 
+use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::fs::File;
 
 pub struct GameGear {
- 
     // cpu
     pub cpu: Z80,
 
@@ -29,9 +28,7 @@ pub struct GameGear {
 }
 
 impl GameGear {
-
     pub fn new(rom: Rom) -> GameGear {
-
         let cpu = Z80::new(rom);
 
         GameGear {
@@ -58,8 +55,7 @@ impl GameGear {
         self.load_state_from_file("./rgg-state.json")
     }
 
-    pub fn load_state_from_file(&mut self, filename:&str) {
-
+    pub fn load_state_from_file(&mut self, filename: &str) {
         // open state from file
         let f = File::open(filename).unwrap();
         let mut bf = BufReader::new(f);
@@ -73,9 +69,9 @@ impl GameGear {
         self.cpu.restore_state(ss);
     }
 
-    pub fn trace_instructions(&mut self, active:bool) {
+    pub fn trace_instructions(&mut self, active: bool) {
         let pactive = self.trace_instructions;
-        
+
         if pactive && !active {
             self.instructions.clear();
         }
@@ -87,16 +83,14 @@ impl GameGear {
         self.cpu.reset();
     }
 
-    pub fn set_button_state(&mut self, b:JoystickButton, state:bool) {
-        self.cpu.bus.joystick.set_state(b,state)
+    pub fn set_button_state(&mut self, b: JoystickButton, state: bool) {
+        self.cpu.bus.joystick.set_state(b, state)
     }
 
-    pub fn step(&mut self) -> (bool,bool) {
-
+    pub fn step(&mut self) -> (bool, bool) {
         // if this step is the first one, synchronize CPU emulation
         // and PSG emulation timings
         if self.first_step {
-
             self.cpu.bus.synchronize_psg(0);
 
             self.first_step = false;
@@ -112,19 +106,17 @@ impl GameGear {
         let mut new_frame = false;
         let mut will_break = false;
         match self.cpu.step() {
-
-            Z80RunState::Running => {
-            },
+            Z80RunState::Running => {}
 
             Z80RunState::BreakpointReached => {
                 will_break = true;
                 self.trace_instructions = true;
-            },
+            }
 
             Z80RunState::UnknownInstruction => {
                 will_break = true;
                 self.trace_instructions = true;
-            },
+            }
         }
 
         // bus, VDP or PSG may trigger a breakpoint
@@ -157,4 +149,3 @@ impl GameGear {
         (will_break, new_frame)
     }
 }
-

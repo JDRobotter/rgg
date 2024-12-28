@@ -1,4 +1,3 @@
-
 use Vec;
 
 pub struct MemoryBlock {
@@ -7,10 +6,10 @@ pub struct MemoryBlock {
 }
 
 impl MemoryBlock {
-    pub fn new(size:usize, byte:u8) -> MemoryBlock {
+    pub fn new(size: usize, byte: u8) -> MemoryBlock {
         MemoryBlock {
             size,
-            data : vec![byte; size],
+            data: vec![byte; size],
         }
     }
 
@@ -18,7 +17,7 @@ impl MemoryBlock {
         base64::encode(&self.data)
     }
 
-    pub fn from_base64(&mut self, edata:&str) {
+    pub fn from_base64(&mut self, edata: &str) {
         self.data = base64::decode(edata).unwrap();
         assert_eq!(self.data.len(), self.size);
     }
@@ -39,7 +38,6 @@ impl Index<usize> for MemoryBlock {
 
 use std::ops::IndexMut;
 impl IndexMut<usize> for MemoryBlock {
-
     fn index_mut(&mut self, idx: usize) -> &mut u8 {
         &mut self.data[idx]
     }
